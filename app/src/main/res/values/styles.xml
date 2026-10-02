@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.AiGlassMeeting" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>
+

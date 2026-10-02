@@ -1,0 +1,17 @@
+.gradle/
+.kotlin/
+.idea/
+**/build/
+local.properties
+*.iml
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+server/.env
+server/certs/
+server/models/
+captures/
+emulator.stdout.log
+emulator.stderr.log
+
