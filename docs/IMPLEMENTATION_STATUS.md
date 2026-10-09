@@ -2,6 +2,8 @@
 
 本文件把 [SPEC](SPEC.md) 的目標與目前能提供的證據分開。以下「通過」僅代表列出的測試環境，不代表 VIVE Eagle 真機驗收。
 
+> 以下是 2026-10-02 的實作快照。2026-10-08 起已取得眼鏡並完成 S23 Ultra 無線部署；最新硬體／授權狀態見 [HARDWARE_VALIDATION.md](HARDWARE_VALIDATION.md)。2026-10-09 已定位 Connect 的套件白名單拒絕分支，並取得端點的實際 JSON，確認主專案新舊包名皆未收錄，見 [白名單取得結果](SDK_WHITELIST_CAPTURE_PLAN.md) 與 [授權流程分析](SDK_AUTH_FLOW_ANALYSIS.md)；主專案完整握手與眼鏡串流仍未通過。
+
 | 能力 | 目前狀態 | 可重現證據／剩餘驗證 |
 |---|---|---|
 | HTC 0.6.0 SDK 接入 | 已編譯、已串接公開 `startAudioStreaming` 與一次 `startVideoStreaming` 的雙 callback | 眼鏡尚未取得；VIVE Connect、權限、真實 AAC/H.264、BLE 時間戳及長時穩定性未驗證。 |

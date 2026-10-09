@@ -7,7 +7,7 @@
 - Android：JDK 17、Android SDK Platform 36、Gradle Wrapper；`minSdk 29`、`targetSdk 36`。
 - HTC SDK：本機需有同層 `../Android_ViveGlassSDK_0.6.0_beta/ViveGlassSample/repository`，其中包含 `com.htc.viveglass.sdk:viveglass_client:0.6.0`。若路徑不同，修改 [settings.gradle.kts](settings.gradle.kts) 的 Maven 路徑。AAR 不複製到此 Git 儲存庫。
 - Windows PowerShell：`$env:JAVA_HOME='C:\Program Files\Java\jdk-17'`，接著執行 `./gradlew.bat :app:assembleDebug`。用 IntelliJ IDEA 開啟此資料夾即可匯入 Gradle 專案；模擬器／Logcat 可用 Android SDK 工具或 Android Studio。
-- 真機模式先安裝 HTC VIVE Connect，依 SDK 流程配對、授予眼鏡麥克風／相機權限。**尚未取得 VIVE Eagle，因此 SDK callback、韌體相容性與連續錄製時間尚未通過真機驗證。**
+- 真機模式先安裝 HTC VIVE Connect，依 SDK 流程配對、完成 App 註冊並授予眼鏡麥克風／相機權限。**已取得 VIVE Eagle，並透過無線 ADB 部署至 S23 Ultra；主專案授權仍被拒絕。2026-10-09 已定位 Connect 白名單判定，並取得端點的 HTTP 200 JSON：官方 sample 在內，主專案新舊包名皆不在內，待 HTC 提供登錄方式。** 詳見 [白名單取得結果](docs/SDK_WHITELIST_CAPTURE_PLAN.md)、[授權流程分析](docs/SDK_AUTH_FLOW_ANALYSIS.md) 與 [真機接入紀錄](docs/HARDWARE_VALIDATION.md)。串流與長時錄製尚未通過真機驗證。
 
 ## App 操作
 

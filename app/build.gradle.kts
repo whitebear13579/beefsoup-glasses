@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "edu.ncku.aiglass"
+    namespace = "com.beefsoup.ai.glass"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "edu.ncku.aiglass"
+        applicationId = "com.beefsoup.ai.glass"
         minSdk = 29
         targetSdk = 36
         versionCode = 1

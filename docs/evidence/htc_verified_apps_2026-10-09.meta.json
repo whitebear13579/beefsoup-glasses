@@ -1,0 +1,17 @@
+{
+  "endpoint": "https://d223uyld9fywgu.cloudfront.net/sdk/htc_verified_apps.json",
+  "retrieved_at_utc": "2026-10-08T20:17:17.293084+00:00",
+  "http_status": 200,
+  "content_type": "application/json",
+  "body_bytes": 2587,
+  "body_sha256": "047bca4a69615005a808ebcb1cb88da9b34c5ea7b85b6f5609f8d4b1b75a65d1",
+  "response_headers": {
+    "Date": "Thu, 08 Oct 2026 20:17:26 GMT",
+    "Last-Modified": "Wed, 30 Sep 2026 07:04:42 GMT",
+    "ETag": "\"4b020429d100a8f625e8de5c8ca92dee\"",
+    "X-Cache": "Miss from cloudfront"
+  },
+  "method": "static_selected_entry_decode_then_single_read_only_get",
+  "phone_runtime_capture": false,
+  "key_saved": false
+}
