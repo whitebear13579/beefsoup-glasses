@@ -6,6 +6,11 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 
+data class MeetingHighlight(val id: String, val sequence: Long, val ptsUs: Long,
+    val imagePath: String, val text: String, val rawText: String, val category: String,
+    val reason: String, val roi: List<Double>, val model: String,
+    val confirmed: Boolean = false, val excluded: Boolean = false)
+
 /** Private, append-only timeline. Pending inference audio survives a process restart. */
 class MeetingStore private constructor(val directory: File, val id: String) {
     private val timeline = File(directory, "timeline.jsonl")
@@ -106,6 +111,70 @@ class MeetingStore private constructor(val directory: File, val id: String) {
             InferenceResult(data.getLong("sequence"), data.getLong("startUs"),
                 data.getString("text"), data.optString("translation"), data.optString("model"))
         }.associateBy { it.sequence }.values.sortedBy { it.sequence }
+
+    @Synchronized fun saveHighlight(sequence: Long, frame: VisualFrame, review: VisualReview): MeetingHighlight {
+        require(review.keep && frame.jpeg.size <= 512_000 && (review.text.isNotBlank() || frame.manual))
+        val id = UUID.randomUUID().toString()
+        val folder = File(directory, "images").apply { check(isDirectory || mkdirs()) }
+        val file = File(folder, "$id.jpg")
+        val partial = File(folder, "$id.jpg.partial")
+        try {
+            FileOutputStream(partial).use { it.write(frame.jpeg); it.fd.sync() }
+            check(partial.renameTo(file)) { "無法保存重點照片" }
+            event("highlight", JSONObject().put("id", id).put("sequence", sequence).put("ptsUs", frame.ptsUs)
+                .put("image", "images/$id.jpg").put("text", review.text).put("rawText", frame.text)
+                .put("category", review.category).put("reason", review.reason).put("model", review.model)
+                .put("roi", org.json.JSONArray(review.roi)))
+        } catch (error: Exception) {
+            partial.delete(); file.delete()
+            throw error
+        }
+        return MeetingHighlight(id, sequence, frame.ptsUs, file.absolutePath, review.text, frame.text,
+            review.category, review.reason, review.roi, review.model)
+    }
+
+    @Synchronized fun highlights(): List<MeetingHighlight> {
+        val result = linkedMapOf<String, MeetingHighlight>()
+        events().forEach { event ->
+            val data = event.optJSONObject("data") ?: return@forEach
+            runCatching {
+                val id = data.getString("id")
+                when (event.optString("type")) {
+                    "highlight" -> {
+                        UUID.fromString(id)
+                        val relative = data.getString("image")
+                        require(relative == "images/$id.jpg")
+                        val roi = data.getJSONArray("roi")
+                        result[id] = MeetingHighlight(id, data.getLong("sequence"), data.getLong("ptsUs"),
+                            File(directory, relative).absolutePath, data.getString("text"), data.getString("rawText"),
+                            data.getString("category"), data.getString("reason"), (0..3).map { roi.getDouble(it) },
+                            data.optString("model"))
+                    }
+                    "highlight_update" -> result[id]?.let { prior ->
+                        result[id] = prior.copy(text = data.getString("text"),
+                            confirmed = data.getBoolean("confirmed"), excluded = data.getBoolean("excluded"))
+                    }
+                }
+            }
+        }
+        return result.values.toList()
+    }
+
+    @Synchronized fun updateHighlight(id: String, text: String, confirmed: Boolean, excluded: Boolean): MeetingHighlight {
+        val prior = highlights().first { it.id == id && !it.excluded }
+        require(text.length <= 4000 && (!confirmed || text.isNotBlank()))
+        event("highlight_update", JSONObject().put("id", id).put("text", text)
+            .put("confirmed", confirmed && !excluded).put("excluded", excluded))
+        if (excluded) File(prior.imagePath).delete()
+        return prior.copy(text = text, confirmed = confirmed && !excluded, excluded = excluded)
+    }
+
+    fun confirmedHighlightObservations(): List<Pair<Long, OcrObservation>> = highlights()
+        .filter { it.confirmed && !it.excluded }.map { it.sequence to OcrObservation(it.ptsUs, it.text) }
+
+    fun utterances(): List<TranslatedUtterance> = events().filter { it.optString("type") == "translation_utterance" }
+        .mapNotNull { runCatching { InferenceProtocol.parseUtterance(it.getJSONObject("data")) }.getOrNull() }
+        .distinctBy { it.id }
 
     companion object {
         fun create(context: Context): MeetingStore {

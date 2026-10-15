@@ -28,9 +28,20 @@ data class MeetingUiState(
     val summary: String = "",
     val savedDirectory: String = "",
     val pendingAudio: Int = 0,
+    val connecting: Boolean = false,
+    val userIssue: String? = null,
+    val needsSystemSettings: Boolean = false,
+    val highlights: List<MeetingHighlight> = emptyList(),
+    val utterances: List<TranslatedUtterance> = emptyList(),
+    val speechStatus: String = "自動播報已關閉",
+    val automaticSpeech: Boolean = false,
+    val continuousTranslation: Boolean = false,
+    val inferenceStatus: String = "尚未啟用翻譯服務",
+    val visionStatus: String = "只保留與會議有關的重點影像",
+    val recordingSinceMs: Long = 0,
 )
 
-data class OffloadSettings(val endpoint: String, val token: String)
+data class OffloadSettings(val endpoint: String, val token: String, val targetLanguage: String = "zh-TW")
 
 class MeetingRuntime(private val app: Application) {
     private val main = Handler(Looper.getMainLooper())
@@ -39,6 +50,9 @@ class MeetingRuntime(private val app: Application) {
     private var audio: AudioPipeline? = null
     private var video: VideoOcrPipeline? = null
     private var remote: RemoteInferenceClient? = null
+    private var visionReviewer: VisionReviewer? = null
+    private var speaker: TranslationSpeaker? = null
+    private val utteranceIds = mutableSetOf<String>()
     private var store: MeetingStore? = null
     private var transcriptTimeline = TranscriptTimeline()
     private var ocrSequence = 0L
@@ -57,12 +71,15 @@ class MeetingRuntime(private val app: Application) {
                 transcriptTimeline.accept(InferenceResult(data.getLong("sequence"), data.getLong("startUs"),
                     data.getString("text"), data.optString("translation"), data.optString("model")))
             }
-            ocrSequence = previous.ocrObservations().size.toLong()
+            ocrSequence = (previous.highlights().maxOfOrNull { it.sequence } ?: -1) + 1
+            utteranceIds.addAll(previous.utterances().map { it.id })
             _state.update { it.copy(
                 savedDirectory = previous.directory.absolutePath,
                 pendingAudio = previous.pendingCount(),
-                transcript = transcriptTimeline.display().takeLast(50),
+                transcript = transcriptTimeline.display(),
                 ocr = previous.ocrObservations().map { entry -> entry.second.text }.takeLast(20),
+                highlights = previous.highlights().filterNot { it.excluded }.takeLast(100),
+                utterances = previous.utterances(),
                 summary = events.lastOrNull { it.optString("type") == "summary" }
                     ?.optJSONObject("data")?.optString("text").orEmpty(),
                 status = if (previous.stoppedCleanly()) "已載入最近會議，可補送待轉譯片段"
@@ -75,7 +92,10 @@ class MeetingRuntime(private val app: Application) {
         connectionJob?.cancel()
         connectionJob = scope.launch {
             link.connected.collect { connected ->
-                _state.update { it.copy(connected = connected) }
+                _state.update { old -> old.copy(connected = connected,
+                    connecting = if (connected) false else old.connecting,
+                    userIssue = if (connected) null else old.userIssue,
+                    status = if (connected && old.connecting) "眼鏡已連線，可以開始記錄" else old.status) }
                 if (!connected && machine.snapshot().phase == SessionPhase.RECORDING)
                     fail(machine.snapshot().epoch, "眼鏡連線中斷")
             }
@@ -92,44 +112,77 @@ class MeetingRuntime(private val app: Application) {
     }
 
     fun connect() {
+        if (state.value.connected || state.value.connecting) return
         try {
+            _state.update { it.copy(connecting = true, userIssue = null, needsSystemSettings = false,
+                status = "正在連接眼鏡，請保持配戴") }
             link.connect()
-            _state.update { it.copy(connected = link.connected.value,
-                status = if (it.demo) "模擬來源已連線" else "正在連接 VIVE Eagle，請確認 VIVE Connect 已配對") }
+            main.postDelayed({
+                if (state.value.connecting && !state.value.connected)
+                    _state.update { it.copy(connecting = false,
+                        userIssue = "連接眼鏡逾時。請確認已配戴，並在 VIVE Connect 完成連線後重試。",
+                        status = "連接眼鏡逾時") }
+            }, 15_000)
         } catch (error: Exception) {
-            _state.update { it.copy(status = "眼鏡連線失敗：${error.message}") }
+            _state.update { it.copy(connecting = false, status = "眼鏡連線失敗：${error.message}",
+                userIssue = "無法連接眼鏡。請在 VIVE Connect 確認配對與此 App 的授權後重試。") }
         }
     }
 
     fun showPermissionDenied() {
-        _state.update { it.copy(status = "附近裝置權限未授予，請於系統設定允許後重試") }
+        _state.update { it.copy(status = "附近裝置權限未授予", needsSystemSettings = true,
+            userIssue = "尚未允許附近裝置權限。請在系統設定允許後，回來重新連接眼鏡。") }
     }
 
-    suspend fun start(activity: Activity, mode: StreamMode, offload: OffloadSettings?): Boolean {
+    fun dismissIssue() { _state.update { it.copy(userIssue = null, needsSystemSettings = false) } }
+
+    fun showViveConnectUnavailable() {
+        _state.update { it.copy(userIssue = "請先安裝 VIVE Connect 並完成眼鏡配對。", needsSystemSettings = false) }
+    }
+
+    suspend fun start(activity: Activity, mode: StreamMode, offload: OffloadSettings?,
+        continuousTranslation: Boolean = false, autoSpeak: Boolean = false): Boolean {
         if (!link.connected.value) {
-            _state.update { it.copy(status = "請先連線") }
+            _state.update { it.copy(status = "請先連線", userIssue = "請先連接眼鏡，再開始記錄。") }
             return false
         }
         if (state.value.demo && mode == StreamMode.AUDIO_VIDEO) {
-            _state.update { it.copy(status = "模擬來源僅提供合成音訊；相機 OCR 須眼鏡真機") }
+            _state.update { it.copy(status = "模擬來源僅提供合成音訊；相機 OCR 須眼鏡真機",
+                userIssue = "模擬來源不提供相機，請關閉模擬來源並連接眼鏡。") }
+            return false
+        }
+        if (continuousTranslation && offload == null) {
+            _state.update { it.copy(status = "請先在設定中連接翻譯服務", userIssue = "請先在設定中連接翻譯服務。") }
             return false
         }
         if (!link.ensurePermissions(activity, mode)) {
-            _state.update { it.copy(status = "眼鏡麥克風／相機授權未通過") }
+            _state.update { it.copy(status = "眼鏡麥克風／相機授權未通過", needsSystemSettings = false,
+                userIssue = "眼鏡麥克風／相機尚未授權。請在 VIVE Connect 允許此 App 使用眼鏡，回來後再次開始。") }
             return false
         }
         val epoch = machine.begin(mode) ?: return false
         remote?.close()
         remote = null
+        visionReviewer?.close(); visionReviewer = null
+        synchronized(this) { utteranceIds.clear() }
+        if (speaker == null && autoSpeak) speaker = TranslationSpeaker(app) { status ->
+            _state.update { it.copy(speechStatus = status) }
+        }
+        speaker?.begin(autoSpeak)
         transcriptTimeline = TranscriptTimeline()
         ocrSequence = 0L
-        _state.update { it.copy(session = machine.snapshot(), status = "準備錄製…",
-            transcript = emptyList(), ocr = emptyList(), summary = "", pendingAudio = 0) }
+        _state.update { it.copy(session = machine.snapshot(), status = "準備錄製…", userIssue = null,
+            transcript = emptyList(), ocr = emptyList(), summary = "", pendingAudio = 0,
+            highlights = emptyList(), utterances = emptyList(), automaticSpeech = autoSpeak,
+            continuousTranslation = continuousTranslation,
+            recordingSinceMs = System.currentTimeMillis(),
+            visionStatus = if (offload == null) "可手動保留照片；連接電腦後可自動找重點" else "等待清楚、穩定的畫面") }
         try {
             val sessionStore = MeetingStore.create(app)
             store = sessionStore
             sessionStore.event("start", JSONObject().put("mode", mode.name)
-                .put("epoch", epoch).put("demo", state.value.demo))
+                .put("epoch", epoch).put("demo", state.value.demo)
+                .put("continuousTranslation", continuousTranslation).put("targetLanguage", offload?.targetLanguage ?: "zh-TW"))
             _state.update { it.copy(savedDirectory = sessionStore.directory.absolutePath) }
             if (offload != null) {
                 remote = RemoteInferenceClient(sessionStore, epoch,
@@ -140,7 +193,7 @@ class MeetingRuntime(private val app: Application) {
                         synchronized(transcriptTimeline) {
                             transcriptTimeline.accept(result)
                             _state.update { old -> old.copy(
-                                transcript = transcriptTimeline.display().takeLast(50),
+                                transcript = transcriptTimeline.display(),
                                 pendingAudio = (sessionStore.pendingCount() - 1).coerceAtLeast(0)) }
                         }
                     },
@@ -148,8 +201,22 @@ class MeetingRuntime(private val app: Application) {
                         sessionStore.event("summary", JSONObject().put("text", summary))
                         _state.update { it.copy(summary = summary) }
                     },
-                    onStatus = { status -> _state.update { it.copy(status = status) } })
+                    onStatus = { status -> _state.update { it.copy(inferenceStatus = status) } },
+                    targetLanguage = offload.targetLanguage, continuousTranslation = continuousTranslation,
+                    onUtterance = { item -> acceptUtterance(sessionStore, epoch, item, true) })
                 remote!!.connect(offload.endpoint, offload.token, BuildConfig.DEBUG)
+                if (mode == StreamMode.AUDIO_VIDEO) visionReviewer = VisionReviewer(offload, sessionStore.id, epoch,
+                    onReview = { frame, review ->
+                        runCatching { sessionStore.event("vision_review", JSONObject().put("ptsUs", frame.ptsUs).put("keep", review.keep)
+                            .put("category", review.category).put("model", review.model)) }
+                        if (review.keep) saveHighlight(sessionStore, epoch, frame, review)
+                        else if (store?.id == sessionStore.id) _state.update {
+                            it.copy(visionStatus = "已略過與會議無關或不清楚的畫面") }
+                    }, onIssue = { ptsUs, issue -> if (store?.id == sessionStore.id) {
+                        runCatching { sessionStore.event("vision_error", JSONObject().put("ptsUs", ptsUs).put("reason", issue.take(500))) }
+                        video?.retryCandidate()
+                        _state.update { it.copy(visionStatus = "$issue；仍可手動保留照片") }
+                    } })
             }
             audio = AudioPipeline(File(sessionStore.directory, "audio"),
                 onPcmChunk = { chunk ->
@@ -166,21 +233,26 @@ class MeetingRuntime(private val app: Application) {
                 })
             if (mode == StreamMode.AUDIO_VIDEO) {
                 video = VideoOcrPipeline(
-                    onObservation = { observation ->
-                        val sequence = synchronized(this) { ocrSequence++ }
-                        sessionStore.event("ocr", JSONObject().put("sequence", sequence)
-                            .put("ptsUs", observation.ptsUs)
-                            .put("text", observation.text))
-                        remote?.sendOcr(sequence, observation)
-                        _state.update { it.copy(ocr = (it.ocr + observation.text).takeLast(20)) }
-                    },
+                    onObservation = { /* Raw OCR is a candidate signal, not a meeting record. */ },
                     onWarning = { reason ->
                         sessionStore.event("warning", JSONObject().put("reason", reason))
                         _state.update { it.copy(status = reason) }
-                    })
+                    }, onCandidate = { frame ->
+                        if (frame.manual) {
+                            saveHighlight(sessionStore, epoch, frame, VisualReview(true, frame.text,
+                                "document", "由你手動保留，請核對照片與辨識文字", listOf(0.0, 0.0, 1.0, 1.0), "phone-ocr"))
+                            true
+                        }
+                        else {
+                            runCatching { sessionStore.event("vision_candidate", JSONObject().put("ptsUs", frame.ptsUs)) }
+                            _state.update { it.copy(visionStatus = "正在判斷畫面與會議的關聯") }
+                            visionReviewer?.offer(frame, synchronized(transcriptTimeline) {
+                                transcriptTimeline.display().takeLast(4).joinToString("\n") }) ?: false
+                        }
+                    }, automaticSelection = offload != null)
             }
             ContextCompat.startForegroundService(app, Intent(app, MeetingService::class.java)
-                .setAction(MeetingService.ACTION_START))
+                .setAction(MeetingService.ACTION_START).putExtra(MeetingService.EXTRA_TRANSLATION, continuousTranslation))
             val events = object : GlassEvents {
                 override fun onAudio(epoch: Long, packet: EncodedPacket) {
                     if (machine.snapshot().epoch != epoch || audio?.offer(packet) == false) {
@@ -213,6 +285,9 @@ class MeetingRuntime(private val app: Application) {
         val epoch = machine.stopping() ?: return
         val mode = state.value.session.mode ?: return
         _state.update { it.copy(session = machine.snapshot(), status = "正在收尾並保存音訊…") }
+        speaker?.stop()
+        visionReviewer?.close(); visionReviewer = null
+        _state.update { it.copy(automaticSpeech = false, speechStatus = "播報已停止") }
         try { link.stop(mode) } catch (_: Exception) { }
         video?.close()
         video = null
@@ -238,7 +313,7 @@ class MeetingRuntime(private val app: Application) {
         if (epoch != machine.snapshot().epoch) return
         when (event) {
             StreamingEvent.STARTED -> if (machine.started(epoch))
-                _state.update { it.copy(session = machine.snapshot(), status =
+                _state.update { it.copy(session = machine.snapshot(), userIssue = null, status =
                     if (it.demo) "模擬錄製中：合成音訊" else "眼鏡錄製中") }
             StreamingEvent.STOPPED -> if (machine.snapshot().phase == SessionPhase.RECORDING)
                 fail(epoch, "眼鏡串流意外停止")
@@ -251,6 +326,8 @@ class MeetingRuntime(private val app: Application) {
     private fun fail(epoch: Long, reason: String) {
         if (!machine.fail(epoch, reason)) return
         store?.event("health", JSONObject().put("epoch", epoch).put("reason", reason))
+        speaker?.stop()
+        visionReviewer?.close(); visionReviewer = null
         val mode = state.value.session.mode
         if (mode != null) try { link.stop(mode) } catch (_: Exception) { }
         video?.close(); video = null
@@ -260,20 +337,106 @@ class MeetingRuntime(private val app: Application) {
             remote?.finish()
             app.stopService(Intent(app, MeetingService::class.java))
         } ?: app.stopService(Intent(app, MeetingService::class.java))
-        _state.update { it.copy(session = machine.snapshot(), status = reason) }
+        _state.update { it.copy(session = machine.snapshot(), status = reason, automaticSpeech = false,
+            userIssue = "記錄已中斷，已保存內容仍在手機。請檢查眼鏡連線、電量與授權後再開始。") }
     }
 
     fun exportTimeline(): String = store?.exportText().orEmpty()
+
+    fun exportMeetingText(): String = buildString {
+        appendLine("AI 眼鏡會議紀錄")
+        appendLine()
+        if (state.value.summary.isNotBlank()) {
+            appendLine("會議摘要"); appendLine(state.value.summary); appendLine()
+        }
+        appendLine("逐字稿與翻譯")
+        state.value.transcript.forEach { appendLine(it); appendLine() }
+        appendLine("已確認的影像重點")
+        state.value.highlights.filter { it.confirmed && !it.excluded }.forEach {
+            appendLine("${mediaTime(it.ptsUs)}\n${it.text}\n")
+        }
+    }
+
+    private fun acceptUtterance(sessionStore: MeetingStore, epoch: Long, item: TranslatedUtterance, live: Boolean) {
+        synchronized(this) {
+            if (store?.id != sessionStore.id || item.id in utteranceIds) return
+            sessionStore.event("translation_utterance", JSONObject().put("id", item.id).put("source", item.source)
+                .put("translation", item.translation).put("language", item.language)
+                .put("startUs", item.startUs).put("endUs", item.endUs))
+            utteranceIds.add(item.id)
+            _state.update { it.copy(utterances = it.utterances + item) }
+        }
+        if (live) main.post {
+            if (machine.snapshot().epoch == epoch && machine.snapshot().phase == SessionPhase.RECORDING)
+                speaker?.offer(item)
+        }
+    }
+
+    private fun saveHighlight(sessionStore: MeetingStore, epoch: Long, frame: VisualFrame, review: VisualReview) {
+        if (store?.id != sessionStore.id || machine.snapshot().epoch != epoch ||
+            machine.snapshot().phase != SessionPhase.RECORDING) return
+        try {
+            synchronized(this) {
+                if (!frame.manual && state.value.highlights.lastOrNull()?.text
+                        ?.filter { it.isLetterOrDigit() } == review.text.filter { it.isLetterOrDigit() }) {
+                    _state.update { it.copy(visionStatus = "重點內容未變動，已避免重複保存") }
+                    return
+                }
+                val item = sessionStore.saveHighlight(ocrSequence++, frame, review)
+                _state.update { it.copy(highlights = (it.highlights + item).takeLast(100),
+                    visionStatus = "已找到重點照片，請到「重點」核對並確認") }
+            }
+        } catch (error: Exception) {
+            _state.update { it.copy(visionStatus = "照片保存失敗：${error.message}") }
+        }
+    }
+
+    fun captureHighlight() {
+        if (machine.snapshot().phase == SessionPhase.RECORDING && video != null) {
+            video?.requestCapture()
+            _state.update { it.copy(visionStatus = "正在保留下一張可解碼影格") }
+        }
+    }
+
+    fun updateHighlight(id: String, text: String, confirmed: Boolean, excluded: Boolean) {
+        val sessionStore = store ?: return
+        scope.launch(Dispatchers.IO) {
+            try {
+                val item = sessionStore.updateHighlight(id, text, confirmed, excluded)
+                if (store?.id != sessionStore.id) return@launch
+                remote?.removeOcr(item.sequence)
+                if (item.confirmed) remote?.sendOcr(item.sequence, OcrObservation(item.ptsUs, item.text))
+                _state.update { it.copy(highlights = sessionStore.highlights().filterNot { h -> h.excluded }.takeLast(100),
+                    summary = "", visionStatus = if (excluded) "已排除此片段並刪除照片" else "重點已更新") }
+            } catch (error: Exception) {
+                _state.update { it.copy(visionStatus = "無法更新重點：${error.message}") }
+            }
+        }
+    }
+
+    fun setAutomaticSpeech(enabled: Boolean) {
+        if (speaker == null) speaker = TranslationSpeaker(app) { status -> _state.update { it.copy(speechStatus = status) } }
+        speaker?.setAutomatic(enabled)
+        _state.update { it.copy(automaticSpeech = enabled) }
+    }
+
+    fun replay(item: TranslatedUtterance) {
+        if (speaker == null) speaker = TranslationSpeaker(app) { status -> _state.update { it.copy(speechStatus = status) } }
+        speaker?.replay(item)
+    }
 
     fun deleteCurrent() {
         if (machine.snapshot().phase in setOf(SessionPhase.STARTING, SessionPhase.RECORDING, SessionPhase.STOPPING)) return
         try {
             remote?.close(); remote = null
+            speaker?.stop()
+            visionReviewer?.close(); visionReviewer = null
             store?.delete(app)
             store = null
             transcriptTimeline = TranscriptTimeline()
             _state.update { it.copy(savedDirectory = "", pendingAudio = 0, transcript = emptyList(),
-                ocr = emptyList(), summary = "", status = "會議資料已刪除") }
+                ocr = emptyList(), highlights = emptyList(), utterances = emptyList(), summary = "",
+                automaticSpeech = false, status = "會議資料已刪除") }
         } catch (error: Exception) {
             _state.update { it.copy(status = "無法刪除會議：${error.message}") }
         }
@@ -283,6 +446,7 @@ class MeetingRuntime(private val app: Application) {
         if (machine.snapshot().phase in setOf(SessionPhase.STARTING, SessionPhase.RECORDING, SessionPhase.STOPPING)) return
         val sessionStore = store ?: return
         val epoch = sessionStore.startEpoch() ?: return
+        val startData = sessionStore.events().firstOrNull { it.optString("type") == "start" }?.optJSONObject("data")
         remote?.close()
         remote = RemoteInferenceClient(sessionStore, epoch,
             onResult = { result ->
@@ -291,7 +455,7 @@ class MeetingRuntime(private val app: Application) {
                     .put("translation", result.translation).put("model", result.model))
                 synchronized(transcriptTimeline) {
                     transcriptTimeline.accept(result)
-                        _state.update { it.copy(transcript = transcriptTimeline.display().takeLast(50),
+                        _state.update { it.copy(transcript = transcriptTimeline.display(),
                         pendingAudio = (sessionStore.pendingCount() - 1).coerceAtLeast(0)) }
                 }
             },
@@ -299,7 +463,10 @@ class MeetingRuntime(private val app: Application) {
                 sessionStore.event("summary", JSONObject().put("text", summary))
                 _state.update { it.copy(summary = summary) }
             },
-            onStatus = { status -> _state.update { it.copy(status = status) } })
+            onStatus = { status -> _state.update { it.copy(inferenceStatus = status) } },
+            targetLanguage = startData?.optString("targetLanguage", "zh-TW") ?: "zh-TW",
+            continuousTranslation = startData?.optBoolean("continuousTranslation", false) ?: false,
+            onUtterance = { item -> acceptUtterance(sessionStore, epoch, item, false) })
         try {
             remote!!.connect(settings.endpoint, settings.token, BuildConfig.DEBUG)
             remote!!.finish()
@@ -308,5 +475,9 @@ class MeetingRuntime(private val app: Application) {
         }
     }
 
-    fun closeInference() { remote?.close(); remote = null }
+    fun closeInference() {
+        remote?.close(); remote = null
+        visionReviewer?.close(); visionReviewer = null
+        speaker?.stop()
+    }
 }

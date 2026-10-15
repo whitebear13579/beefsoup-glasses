@@ -1,0 +1,219 @@
+{
+  "recordedAt": "2026-10-15T13:34:05.306998+00:00",
+  "scope": "incremental software gates, two short live glasses captures and offline replays; not release acceptance",
+  "device": {
+    "model": "SM-S9180 / S23 Ultra",
+    "android": 16,
+    "api": 36
+  },
+  "applicationId": "com.htc.viveglass.viveglasssample",
+  "namespace": "com.beefsoup.ai.glass",
+  "apkSha256": "ba978a3bbe7b394118886e9124b435a16fc519b32f444cd122fe13ca583e1c83",
+  "tests": {
+    "jvm": {
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "server": {
+      "passed": 19,
+      "warnings": 1,
+      "scope": "includes target-language guard"
+    },
+    "s23Baseline": {
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 49.86,
+      "apkSha256": "4208ea8d64033e497e7f399b1227d35c3f9f263aa6b31b3064327faa46eb8dc7",
+      "scope": "earlier full device suite before candidate/keyboard/trace delta"
+    },
+    "s23LatestTargeted": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 18.349,
+      "apkSha256": "ba978a3bbe7b394118886e9124b435a16fc519b32f444cd122fe13ca583e1c83",
+      "classes": [
+        "VideoOcrPipelineTest",
+        "LiveInferencePipelineTest"
+      ],
+      "scope": "latest APK targeted gates, not full suite rerun"
+    }
+  },
+  "knownSpeechProbe": {
+    "input_reference": "Hello everyone. We will finish the project tomorrow. Please review the meeting notes.",
+    "source": "Hello everyone. We will finish the project tomorrow. Please review the meeting notes.",
+    "translation": "大家好。我們將於明天完成專案。請審閱會議記錄。",
+    "language": "zh-TW",
+    "input_pcm_sha256": "3b7f7a580bf0b72cb2b72fb08776fd19c33c1fb1b58e04eae300704bd5134b68",
+    "stt_seconds": 1.5423512999986997,
+    "translation_seconds": 1.3161923000006936,
+    "stt_model": "faster-whisper-base",
+    "translation_model": "jaahas/qwen3.5-uncensored:4b"
+  },
+  "phoneGateway": {
+    "source": "Hello everyone. We will finish the project tomorrow. Please review the meeting notes.",
+    "translation": "大家好。 我們將於明天完成該專案。 請檢視會議記錄。",
+    "language": "zh-TW",
+    "model": "LocalModels",
+    "chunks": 3,
+    "utterances": 3,
+    "transport": "phone WebSocket to real local gateway"
+  },
+  "phoneTts": {
+    "voice": "zh-TW-language",
+    "language": "zh-TW",
+    "bytes": 276148,
+    "source": "Hello everyone. We will finish the project tomorrow. Please review the meeting notes.",
+    "translation": "大家好。 我們將於明天完成該專案。 請檢視會議記錄。"
+  },
+  "visionProbes": [
+    {
+      "fixture": "whiteboard-with-label.jpg",
+      "result": {
+        "keep": true,
+        "category": "document",
+        "roi": [
+          0.034,
+          0.078,
+          0.729,
+          0.895
+        ],
+        "uncertain": false,
+        "text": "PROJECT REVIEW\nDeadline: Friday\nOwner: Alice\nAction: review the design",
+        "reason": "The image contains a whiteboard slide with project review details and a bottle labeled 'DAILY WATER'. The text on the slide is clearly visible and relevant to the discussion, indicating it's a document being presented or reviewed. The label on the bottle is also part of the scene but not the main subject of the presentation."
+      },
+      "elapsed_seconds": 4.328990099998919
+    },
+    {
+      "fixture": "personal-phone.jpg",
+      "result": {
+        "keep": false,
+        "category": "phone",
+        "roi": [
+          0.231,
+          0.04,
+          0.768,
+          0.905
+        ],
+        "uncertain": false,
+        "text": "",
+        "reason": "The image shows a smartphone screen displaying a list of messages and reminders. The text is clearly visible on the white background of the phone's display."
+      },
+      "elapsed_seconds": 1.7097905999980867
+    }
+  ],
+  "limits": [
+    "single probes are not p95 latency",
+    "actual TTS feedback exists; guard is not AEC",
+    "latest automatic visual candidate path not live glasses tested",
+    "no real scene precision/recall/CER dataset",
+    "rolling ASR context not implemented",
+    "no long-run battery/thermal validation"
+  ],
+  "schemaVersion": 2,
+  "phoneFixtureScope": "earlier recorded phone-to-PC result and TTS synthesis, preserved without relabelling as latest binary",
+  "liveGlasses": {
+    "continuousTranslation": {
+      "counts": {
+        "transcript": 13,
+        "audio_pending": 13,
+        "start": 1,
+        "summary": 1,
+        "translation_utterance": 4,
+        "audio_segment": 5,
+        "stop": 1
+      },
+      "audioSeconds": 45.824,
+      "pending": 0,
+      "partialFiles": [],
+      "health": [],
+      "userConfirmedOutput": "glasses",
+      "userConfirmedFeedback": true,
+      "recognitionQuality": "errors including tomorrow -> model",
+      "echoFreeFullDuplexPassed": false
+    },
+    "cameraAndAudio": {
+      "counts": {
+        "start": 1,
+        "audio_segment": 5,
+        "stop": 1,
+        "highlight": 1,
+        "summary": 1,
+        "transcript": 14,
+        "audio_pending": 14
+      },
+      "audioSeconds": 48.4368253968254,
+      "pending": 0,
+      "partialFiles": [],
+      "health": [],
+      "manualHighlights": 1,
+      "automaticHighlights": 0,
+      "automaticSelectionPassed": false,
+      "imageDimensions": [
+        480,
+        856
+      ]
+    }
+  },
+  "realRecordingReplay": {
+    "longerEnglishContext": {
+      "region": "english-context",
+      "startSeconds": 17.5,
+      "endSeconds": 29,
+      "text": "Hello everyone, we will finish the project tomorrow. Please review the meeting notes.",
+      "language": "en",
+      "languageConfidence": 0.8015598654747009
+    },
+    "feedbackLanguage": {
+      "language": "zh",
+      "confidence": 0.9304582476615906
+    },
+    "guardResult": {
+      "translation": "",
+      "utterances": [],
+      "speechSuppressed": "already_target_language"
+    },
+    "scope": "saved real audio replay; new guard not physically retested"
+  },
+  "realCameraReplay": {
+    "seconds": 16.652321600002324,
+    "result": {
+      "category": "document",
+      "roi": [
+        0.247,
+        0.358,
+        0.999,
+        0.8
+      ],
+      "text": "Hello World!\n你好世界\nこんにちは! 2026/10/1",
+      "reason": "The image shows a document on a tablet with the text 'Hello World!', '你好世界', and 'こんにちは! 2026/10/11' visible, which is the main content of the document. The OCR extracted text matches this content exactly.",
+      "uncertain": false,
+      "keep": true
+    },
+    "scope": "saved manual original JPEG replay, not live automatic selection; date clipped"
+  },
+  "uiReview": {
+    "resolved": [
+      "F1",
+      "F3",
+      "F4"
+    ],
+    "partial": [
+      "F2"
+    ],
+    "disposition": "fix",
+    "remaining": "font_scale 1.5 plus actual IME editor verification; native helper failed to find UiScrollable"
+  },
+  "buildScope": {
+    "debug": "latest APK built and installed",
+    "release": "earlier UI revision built, not latest candidate delta or device release execution"
+  },
+  "cleanup": {
+    "adbDevicesAtHandoff": 0,
+    "temporaryPhoneSettingsRestorePending": true,
+    "privateTestConfigRemovalPending": true
+  }
+}

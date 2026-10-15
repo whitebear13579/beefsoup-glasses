@@ -37,6 +37,11 @@ class MeetingRuntimeDemoTest {
             assertTrue(File(directory, "audio").listFiles()?.any { it.extension == "m4a" } == true)
             assertTrue(runtime.exportTimeline().contains("\"type\":\"stop\""))
             assertTrue(runtime.state.value.pendingAudio > 0)
+            scenario.onActivity {
+                runtime.closeInference()
+                runtime.deleteCurrent()
+                runtime.setDemo(false)
+            }
         }
     }
 

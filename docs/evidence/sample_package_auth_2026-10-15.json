@@ -1,0 +1,74 @@
+{
+  "experiment_date_local": "2026-10-15",
+  "date_timezone": "Asia/Taipei",
+  "phone": "Samsung S23 Ultra SM_S9180",
+  "android_release": "16",
+  "android_api": 36,
+  "connect_version": "1.4.1387452",
+  "sdk_version": "0.6.0",
+  "namespace": "com.beefsoup.ai.glass",
+  "baseline_apk_sha256": "7C37A40444D9821D36DEDA78908E46F2286EB9C5940475D2AC669FEA9DACA2E4",
+  "experimental_apk_sha256": "F8DC63EED9AFBA6FDC3CB1B0E8036B96C26507BBC4BF8DD79FC4DD3101957BAA",
+  "apk_certificate_sha256": "2e7c47ac10f51e00ca624547dca34bbe41c75db795c74ba48e60ef116c357efe",
+  "glasses_available": false,
+  "official_sample_installed_before_test": false,
+  "attempts": [
+    {
+      "role": "baseline",
+      "application_id": "com.beefsoup.ai.glass",
+      "pid_at_attempt": 22157,
+      "raw_log_time_start": "10-15 00:31:07.826",
+      "failure": "The application is not registered.",
+      "handshake_completed": false,
+      "sdk_connect_finished_marker": false,
+      "simulated_audio": false,
+      "pc_inference": false,
+      "sdk_events": [
+        "10-15 00:27:56.503 22157 22157 I ViveGlassKit: ViveGlassKit()++",
+        "10-15 00:27:56.512 22157 22157 I ViveGlassKit: ViveGlassKit()--",
+        "10-15 00:31:07.826 22157 22157 I ViveGlassKit: SDK version: 0.6.0",
+        "10-15 00:31:07.826 22157 25291 I ViveGlassKit: connect()++",
+        "10-15 00:31:07.830 22157 25291 I AuthManager: prepareHandshakeLocked: EC keypair generated",
+        "10-15 00:31:07.830 22157 25291 I AuthManager: performHandshakeSync: handshake prepared",
+        "10-15 00:31:07.830 22157 25291 I AuthManager: performHandshakeSync: posting AuthProxyActivity start to main thread",
+        "10-15 00:31:07.868 22157 22157 I AuthManager: performHandshakeSync: AuthProxyActivity started",
+        "10-15 00:31:07.877 22157 22157 I AuthManager: buildAuthIntent: queryIntentActivities(com.htc.viveglass.action.AUTH) returned 1 result(s)",
+        "10-15 00:31:07.877 22157 22157 I AuthManager: buildAuthIntent: resolved to com.htc.glassesca/com.htc.glassesca.sdk.SdkAuthActivity",
+        "10-15 00:31:09.731 22157 22157 I AuthProxyActivity: onActivityResult: requestCode=1001 resultCode=-1 hasData=true",
+        "10-15 00:31:09.740 22157 25291 E ViveGlassKit: connect(): handshake failed: The application is not registered."
+      ]
+    },
+    {
+      "role": "sample_package",
+      "application_id": "com.htc.viveglass.viveglasssample",
+      "pid_at_attempt": 25825,
+      "raw_log_time_start": "10-15 00:32:16.804",
+      "failure": "host app returned failure: status=failed code=-1",
+      "handshake_completed": false,
+      "sdk_connect_finished_marker": false,
+      "simulated_audio": false,
+      "pc_inference": false,
+      "sdk_events": [
+        "10-15 00:31:51.844 25825 25825 I ViveGlassKit: ViveGlassKit()++",
+        "10-15 00:31:51.851 25825 25825 I ViveGlassKit: ViveGlassKit()--",
+        "10-15 00:32:16.800 25825 25825 I ViveGlassKit: SDK version: 0.6.0",
+        "10-15 00:32:16.804 25825 26065 I ViveGlassKit: connect()++",
+        "10-15 00:32:16.806 25825 26065 I AuthManager: prepareHandshakeLocked: EC keypair generated",
+        "10-15 00:32:16.806 25825 26065 I AuthManager: performHandshakeSync: handshake prepared",
+        "10-15 00:32:16.806 25825 26065 I AuthManager: performHandshakeSync: posting AuthProxyActivity start to main thread",
+        "10-15 00:32:16.831 25825 25825 I AuthManager: performHandshakeSync: AuthProxyActivity started",
+        "10-15 00:32:16.842 25825 25825 I AuthManager: buildAuthIntent: queryIntentActivities(com.htc.viveglass.action.AUTH) returned 1 result(s)",
+        "10-15 00:32:16.842 25825 25825 I AuthManager: buildAuthIntent: resolved to com.htc.glassesca/com.htc.glassesca.sdk.SdkAuthActivity",
+        "10-15 00:32:18.624 25825 25825 I AuthProxyActivity: onActivityResult: requestCode=1001 resultCode=-1 hasData=true",
+        "10-15 00:32:18.638 25825 26065 E ViveGlassKit: connect(): handshake failed: host app returned failure: status=failed code=-1"
+      ]
+    }
+  ],
+  "limitations": [
+    "Raw phone log times have not been converted to another timezone.",
+    "Baseline APK is the retained 2026-10-09 build; experimental APK was rebuilt from the current workspace.",
+    "The whitelist contents used by the phone were not captured in this experiment.",
+    "Error -1 is generic and does not prove the only failure cause is offline glasses.",
+    "Full authorization, Connected and media streaming have not passed."
+  ]
+}

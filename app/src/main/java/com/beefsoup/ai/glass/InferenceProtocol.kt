@@ -12,6 +12,18 @@ data class InferenceResult(
 )
 
 object InferenceProtocol {
+    fun parseUtterance(json: JSONObject): TranslatedUtterance {
+        val id = json.getString("id")
+        val source = json.getString("source")
+        val translation = json.getString("translation")
+        val language = json.getString("language")
+        val start = json.getLong("startUs")
+        val end = json.getLong("endUs")
+        require(id.matches(Regex("u:[0-9]+")) && source.length <= 20_000 && translation.length <= 20_000 &&
+            language in setOf("zh-TW", "en", "ja") && start >= 0 && end >= start)
+        return TranslatedUtterance(id, source, translation, language, start, end)
+    }
+
     fun validateEndpoint(url: String, debug: Boolean): String {
         val normalized = url.trim()
         val uri = java.net.URI(normalized)

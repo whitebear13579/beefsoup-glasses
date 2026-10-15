@@ -110,3 +110,24 @@ APK 檔案 SHA-256：`7C37A40444D9821D36DEDA78908E46F2286EB9C5940475D2AC669FEA9D
 從官方 APK 還原指定端點的金鑰取得流程，由電腦執行一次 GET，得到 HTTP 200、application/json。Android 清單包含官方 sample，不包含 `com.beefsoup.ai.glass` 或 `edu.ncku.aiglass`；完整 [原始 JSON](evidence/htc_verified_apps_2026-10-09.json) 及 [取得紀錄](SDK_WHITELIST_CAPTURE_PLAN.md) 已保存。
 
 此結果確認目前端點有效名單未收錄主專案；下一步請 HTC 提供加入白名單的流程。未擷取手機先前當次回應、未重新測主 App、未修改授權判定，不增加裝置測試通過數。白名單更新後仍須重測完整握手與串流。
+
+## 2026-10-15：官方 sample 包名的主 App 對照
+
+依使用者要求，將主專案的 applicationId 改為 `com.htc.viveglass.viveglasssample`，namespace／Kotlin package 維持 `com.beefsoup.ai.glass`。建置、Manifest 元件解析、簽章、無線安裝與啟動均已確認。
+
+同一支 S23 Ultra／Android 16、Connect 1.4.1387452，以保留的原包名 APK 重測仍回報未註冊；新包名版本改為 `status=failed code=-1`，沒有再出現未註冊訊息。Connect UI 顯示眼鏡無法連線。兩次均未出現 `connect()--`，因此完整 SDK 授權、Connected 與串流仍未通過；一般錯誤不能僅由此判定唯一根因為眼鏡離線。
+
+手機在安裝前未保留原 sample，故未發生同名覆蓋。原包名與實驗 App 已安裝並保留資料，Connect 資料與配對未清除。未重新計入單元或 pipeline 測試通過數。完整條件、APK 雜湊、PID 與日誌見 [包名實驗](SAMPLE_PACKAGE_EXPERIMENT.md) 及 [精簡證據](evidence/sample_package_auth_2026-10-15.json)。
+
+## 2026-10-15 稍後：取得眼鏡，完成在線連線與短時串流
+
+相同 S23 Ultra／Connect，使用實驗 applicationId `com.htc.viveglass.viveglasssample`，確認 SDK `connect()--`、握手 `CONNECTED` 及真實媒體輸入。摘下曾觸發 `APP_INTERACTION_STOPPED_DEVICE_DOFFED` 並結束 App 互動，後續持續配戴重測。
+
+1. 純音訊完成 65.984 秒實錄；7 個 M4A 全部可解碼，AAC 16 kHz 單聲道，19 段正規化 PCM 的去重時長一致，正常保存，無健康事件或殘留 `.partial`。
+2. 相機與音訊首輪在 `ImageReader.nativeCreatePlanes` 發生 JNI 原生崩潰，失敗會議保留。影像改由無 Surface 的 MediaCodec flexible YUV 輸出，按實際 crop／stride 複製成獨立 NV21 後交給 OCR。
+3. 修正後 S23 橫向 856×480 與直向 480×856 的實際 H.264→OCR 回歸通過，`OK (2 tests)`。
+4. 眼鏡同流重測保存 21.107 秒音訊，AAC 44.1 kHz 雙聲道；3 個 M4A、6 段 PCM、20 筆 OCR，正常停止，無健康事件、警告或殘留 `.partial`。實際可見影像為 480×856，解碼儲存高度 864。
+
+文字原文由使用者提供。20 筆觀測中 14 筆包含正確中文「你好世界」，英文與日文仍有明顯錯字，不能記為多語 OCR 品質驗收通過。本次 PC 推論關閉，尚未測實際手機→PC 的 STT／翻譯／摘要、背景／鎖屏、長時間耗電與溫度。正式包名登錄仍待 HTC 回覆。
+
+完整重現過程與剩餘項目見 [在線測試與崩潰修正](HARDWARE_SMOKE_TEST_2026-10-15.md)，可分享指標見 [在線證據 JSON](evidence/vive_eagle_online_2026-10-15.json)。

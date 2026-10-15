@@ -1,6 +1,6 @@
 # VIVE Eagle 第三方 App 註冊調查與支援詢問
 
-首次查詢：2026-10-08；最後更新：2026-10-09。此文件記錄公開文件、真機觀察與二進位流程追蹤；尚未取得 HTC 對註冊操作的回覆。各日期的測試保留當時套件名稱；applicationId 實驗見 §9，namespace 遷移與 Google 登錄假設見 §10，Limited 登錄後重測見 §11，白名單判定見 §12，實際 JSON 見 §13。
+首次查詢：2026-10-08；最後更新：2026-10-15。此文件記錄公開文件、真機觀察與二進位流程追蹤；尚未取得 HTC 對註冊操作的回覆。各日期的測試保留當時套件名稱；applicationId 實驗見 §9，namespace 遷移與 Google 登錄假設見 §10，Limited 登錄後重測見 §11，白名單判定見 §12，實際 JSON 見 §13，sample 包名對照見 §14。
 
 ## 1. 目前結論
 
@@ -32,7 +32,8 @@
 | 項目 | 資料 |
 |---|---|
 | 專案 | 學生專題：AI 眼鏡會議紀錄、即時翻譯與相機 OCR |
-| Android applicationId | `com.beefsoup.ai.glass`（2026-10-09 更改；原為 `edu.ncku.aiglass`） |
+| 向 HTC 申請的 Android applicationId | `com.beefsoup.ai.glass`（2026-10-09 更改；原為 `edu.ncku.aiglass`） |
+| 目前包名對照實驗 | 2026-10-15 暫用 `com.htc.viveglass.viveglasssample`；一般錯誤 `-1`，未完成正式登錄或完整握手，見 §14。 |
 | namespace／Kotlin package | `com.beefsoup.ai.glass`（§9 後完成遷移，見 §10） |
 | Google 登錄 | 使用者回報 Limited 帳戶、套件已註冊、簽章與本機 APK 相同，S23 Ultra 已加入授權裝置；未直接查詢 Google API，見 §11。 |
 | App 版本 | `0.1.0`，versionCode `1`，目前為 Debug APK |
@@ -327,3 +328,11 @@ APK、兩次日誌與 UI 快照保存於 `captures/2026-10-09/google-registered-
 同日稍後從官方 APK 的 arm64 split 取得 `libapikey.so`，追到 `GeneralModule.getAiModelAccessKey()` → `ApiKeyManager.g()` → `getNativeKey(13)`。還原指定項目的解碼流程後，由電腦執行一次指定端點 GET，取得有效 JSON；沒有改動手機或 App 的授權判定，也沒有輸出／保存明文金鑰。
 
 Android 清單 50 筆（49 個不重複包名），包含 `com.htc.viveglass.viveglasssample`，不包含 `com.beefsoup.ai.glass` 或 `edu.ncku.aiglass`。這證明目前該端點的名單確實未收錄主專案，足以導致既有拒絕分支；不代表已讀到手機先前的快取／請求，也不代替 HTC 的申請回覆。完整 [原始 JSON](evidence/htc_verified_apps_2026-10-09.json) 及 [取得紀錄](SDK_WHITELIST_CAPTURE_PLAN.md) 已保存。
+
+## 14. 主專案改用官方 sample 包名（2026-10-15）
+
+使用者回報仍無眼鏡、HTC 尚未回信，要求先做包名對照。僅將 applicationId 改為 `com.htc.viveglass.viveglasssample`，保持 namespace 與 SDK／Debug 簽章，建置並安裝成功。
+
+同日原包名基準仍回報未註冊；sample 包名的本專案 APK 改為 `host app returned failure: status=failed code=-1`，沒有未註冊訊息，也沒有 `connect()--` 或 Connected。結果支持包名與此次拒絕有關；不把一般錯誤改變當作正式 HTC 登錄、白名單內部流程的動態證明或完整授權成功。
+
+本次未使用 Proxy、未替換伺服器 JSON、未修改官方 Connect APK，未改變向 HTC 申請的正式包名。詳細條件與可還原方式見 [SAMPLE_PACKAGE_EXPERIMENT.md](SAMPLE_PACKAGE_EXPERIMENT.md)。

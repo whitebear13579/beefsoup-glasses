@@ -1,15 +1,19 @@
 package com.beefsoup.ai.glass
 
-import android.media.ImageReader
+import android.media.Image
 import android.media.MediaCodec
+import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.os.Handler
 import android.os.HandlerThread
 import android.graphics.ImageFormat
+import android.graphics.Rect
+import android.graphics.YuvImage
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import java.nio.ByteBuffer
+import java.io.ByteArrayOutputStream
 import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -20,11 +24,12 @@ data class OcrObservation(val ptsUs: Long, val text: String)
 class VideoOcrPipeline(
     private val onObservation: (OcrObservation) -> Unit,
     private val onWarning: (String) -> Unit,
+    private val onCandidate: (VisualFrame) -> Boolean = { true },
+    private val automaticSelection: Boolean = true,
 ) {
     private val thread = HandlerThread("meeting-video").apply { start() }
     private val handler = Handler(thread.looper)
     private val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-    private val images = ImageReader.newInstance(856, 480, ImageFormat.YUV_420_888, 3)
     private val queued = ArrayDeque<EncodedPacket>()
     private val busy = AtomicBoolean(false)
     private val waitingCallbacks = AtomicInteger()
@@ -33,7 +38,9 @@ class VideoOcrPipeline(
     private var pps: ByteArray? = null
     private var lastOcrPtsUs = -1_000_000L
     private var lastText = ""
-    private var closed = false
+    private val candidateGate = VisualCandidateGate()
+    private val captureRequested = AtomicBoolean(false)
+    @Volatile private var closed = false
     private val info = MediaCodec.BufferInfo()
     private val outputPoll = object : Runnable {
         override fun run() {
@@ -45,32 +52,6 @@ class VideoOcrPipeline(
             }
             handler.postDelayed(this, 30)
         }
-    }
-
-    init {
-        images.setOnImageAvailableListener({ reader ->
-            val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
-            val ptsUs = image.timestamp / 1000
-            if (busy.get() || ptsUs - lastOcrPtsUs < 1_000_000L) {
-                image.close()
-                return@setOnImageAvailableListener
-            }
-            busy.set(true)
-            lastOcrPtsUs = ptsUs
-            recognizer.process(InputImage.fromMediaImage(image, 0))
-                .addOnSuccessListener { result ->
-                    val text = result.text.trim()
-                    if (text.isNotBlank() && text != lastText) {
-                        lastText = text
-                        onObservation(OcrObservation(ptsUs, text))
-                    }
-                }
-                .addOnFailureListener { onWarning("OCR 辨識失敗：${it.message}") }
-                .addOnCompleteListener {
-                    image.close()
-                    busy.set(false)
-                }
-        }, handler)
     }
 
     fun offer(packet: EncodedPacket) {
@@ -99,11 +80,13 @@ class VideoOcrPipeline(
             queued.clear()
             codec?.runCatching { stop(); release() }
             codec = null
-            images.close()
             recognizer.close()
             thread.quitSafely()
         }
     }
+
+    fun requestCapture() { captureRequested.set(true) }
+    fun retryCandidate() { handler.post { if (!closed) candidateGate.retry() } }
 
     private fun consume() {
         while (queued.isNotEmpty()) {
@@ -138,12 +121,16 @@ class VideoOcrPipeline(
 
     private fun configure() {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, 856, 480)
+        format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
+            MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
         format.setByteBuffer("csd-0", ByteBuffer.wrap(sps!!))
         format.setByteBuffer("csd-1", ByteBuffer.wrap(pps!!))
         codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).apply {
-            configure(format, images.surface, null, 0)
+            // CPU-readable output avoids the S23 ImageReader nativeCreatePlanes abort.
+            configure(format, null, null, 0)
             start()
         }
+        handler.removeCallbacks(outputPoll)
         handler.post(outputPoll)
     }
 
@@ -151,8 +138,80 @@ class VideoOcrPipeline(
         while (true) {
             val index = active.dequeueOutputBuffer(info, 0)
             if (index < 0) return
-            active.releaseOutputBuffer(index, true)
+            try {
+                val ptsUs = info.presentationTimeUs
+                if (info.size > 0 && !busy.get() && ptsUs - lastOcrPtsUs >= 1_000_000L) {
+                    lastOcrPtsUs = ptsUs
+                    // Copy before releasing the codec buffer; ML Kit runs asynchronously.
+                    val packed = checkNotNull(active.getOutputImage(index)) {
+                        "解碼器未提供可讀取的 YUV 影像"
+                    }.use { copyForOcr(it) }
+                    busy.set(true)
+                    try {
+                        recognizer.process(InputImage.fromByteArray(packed.bytes, packed.width, packed.height,
+                            0, InputImage.IMAGE_FORMAT_NV21))
+                            .addOnSuccessListener { result ->
+                                val text = result.text.trim()
+                                handler.post {
+                                    if (closed) return@post
+                                    if (text.isNotBlank() && text != lastText) {
+                                        lastText = text
+                                        onObservation(OcrObservation(ptsUs, text))
+                                    }
+                                    val manual = captureRequested.getAndSet(false)
+                                    val luma = ByteArray(256) { i ->
+                                        val x = ((i % 16 + 0.5) * packed.width / 16).toInt().coerceAtMost(packed.width - 1)
+                                        val y = ((i / 16 + 0.5) * packed.height / 16).toInt().coerceAtMost(packed.height - 1)
+                                        packed.bytes[y * packed.width + x]
+                                    }
+                                    if (manual || automaticSelection && candidateGate.offer(ptsUs, text, luma)) {
+                                        val jpeg = ByteArrayOutputStream()
+                                        if (YuvImage(packed.bytes, ImageFormat.NV21, packed.width, packed.height, null)
+                                                .compressToJpeg(Rect(0, 0, packed.width, packed.height), 85, jpeg)) {
+                                            if (!onCandidate(VisualFrame(ptsUs, text, jpeg.toByteArray(), manual)) && !manual)
+                                                candidateGate.retry()
+                                        }
+                                    }
+                                }
+                            }
+                            .addOnFailureListener {
+                                if (!closed) onWarning("OCR 辨識失敗：${it.message}")
+                            }
+                            .addOnCompleteListener { busy.set(false) }
+                    } catch (error: Exception) {
+                        busy.set(false)
+                        throw error
+                    }
+                }
+            } finally {
+                active.releaseOutputBuffer(index, false)
+            }
         }
+    }
+
+    private data class PackedFrame(val bytes: ByteArray, val width: Int, val height: Int)
+
+    private fun copyForOcr(image: Image): PackedFrame {
+        require(image.format == ImageFormat.YUV_420_888)
+        val crop = image.cropRect
+        val width = crop.width()
+        val height = crop.height()
+        require(width > 0 && height > 0 &&
+            (width or height or crop.left or crop.top) and 1 == 0) { "不支援奇數 YUV 裁切邊界" }
+        val nv21 = ByteArray(width * height * 3 / 2)
+        image.planes.forEachIndexed { planeIndex, plane ->
+            val divisor = if (planeIndex == 0) 1 else 2
+            val step = if (planeIndex == 0) 1 else 2
+            val offset = when (planeIndex) { 0 -> 0; 1 -> width * height + 1; else -> width * height }
+            val source = plane.buffer.duplicate()
+            val origin = source.position() + crop.top / divisor * plane.rowStride +
+                crop.left / divisor * plane.pixelStride
+            for (row in 0 until height / divisor) for (x in 0 until width / divisor) {
+                nv21[offset + (row * (width / divisor) + x) * step] =
+                    source.get(origin + row * plane.rowStride + x * plane.pixelStride)
+            }
+        }
+        return PackedFrame(nv21, width, height)
     }
 }
 

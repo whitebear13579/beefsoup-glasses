@@ -1,0 +1,196 @@
+{
+  "date_local": "2026-10-15",
+  "timezone": "Asia/Taipei",
+  "phone": {
+    "model": "Samsung S23 Ultra SM_S9180",
+    "soc": "SM8550",
+    "android_release": "16",
+    "api": 36
+  },
+  "vive_connect_version": "1.4.1387452",
+  "sdk_version": "0.6.0",
+  "glasses_model": "VIVE Eagle",
+  "glasses_firmware_version": null,
+  "application_id": "com.htc.viveglass.viveglasssample",
+  "namespace": "com.beefsoup.ai.glass",
+  "pre_fix_apk_sha256": "F8DC63EED9AFBA6FDC3CB1B0E8036B96C26507BBC4BF8DD79FC4DD3101957BAA",
+  "post_fix_apk_sha256": "884a3b32c480f60bd8d514c94bc1fb6aca2aab86ff22cea91f3e39e33cae9e8d",
+  "authorization": {
+    "sdk_connect_completed": true,
+    "connected_callback": true,
+    "is_formal_htc_registration_for_beefsoup": false,
+    "evidence_markers": [
+      "connect()--",
+      "returnHandshakeResult: CONNECTED",
+      "UI source connected",
+      "real media captured"
+    ]
+  },
+  "wear_detection": {
+    "observed_event": "APP_INTERACTION_STOPPED_DEVICE_DOFFED",
+    "effect": "App interaction and BLE connection ended"
+  },
+  "audio_smoke": {
+    "session_id": "6e58634d-ff3d-4683-83a9-818ecde46452",
+    "mode": "AUDIO",
+    "simulated_audio": false,
+    "pc_inference_enabled": false,
+    "clean_stop": true,
+    "health_events": [],
+    "warning_events": [],
+    "partial_files": [],
+    "m4a_segments": 1,
+    "decoded_audio_seconds": 8.064,
+    "normalized_pcm_unique_seconds": 8.064,
+    "pcm_chunks": 3,
+    "audio_formats": [
+      {
+        "codec": "aac",
+        "sample_rate": 16000,
+        "channels": 1
+      }
+    ],
+    "archive_pts_monotonic": true,
+    "ocr_observations": 0
+  },
+  "audio_one_minute": {
+    "session_id": "e5149e42-1742-4b49-96c5-ba10293f58c1",
+    "mode": "AUDIO",
+    "simulated_audio": false,
+    "pc_inference_enabled": false,
+    "clean_stop": true,
+    "health_events": [],
+    "warning_events": [],
+    "partial_files": [],
+    "m4a_segments": 7,
+    "decoded_audio_seconds": 65.984,
+    "normalized_pcm_unique_seconds": 65.984,
+    "pcm_chunks": 19,
+    "audio_formats": [
+      {
+        "codec": "aac",
+        "sample_rate": 16000,
+        "channels": 1
+      },
+      {
+        "codec": "aac",
+        "sample_rate": 16000,
+        "channels": 1
+      },
+      {
+        "codec": "aac",
+        "sample_rate": 16000,
+        "channels": 1
+      },
+      {
+        "codec": "aac",
+        "sample_rate": 16000,
+        "channels": 1
+      },
+      {
+        "codec": "aac",
+        "sample_rate": 16000,
+        "channels": 1
+      },
+      {
+        "codec": "aac",
+        "sample_rate": 16000,
+        "channels": 1
+      },
+      {
+        "codec": "aac",
+        "sample_rate": 16000,
+        "channels": 1
+      }
+    ],
+    "archive_pts_monotonic": true,
+    "ocr_observations": 0
+  },
+  "initial_video_failure": {
+    "session_id": "9742066b-ac96-4e6e-8b34-ac997a34dd6e",
+    "pid": 18174,
+    "raw_log_time": "10-15 13:58:18.792",
+    "signal": "SIGABRT",
+    "thread": "meeting-video",
+    "exit_reason": "APP CRASH(NATIVE)",
+    "abort_message": "JNI DETECTED ERROR IN APPLICATION: non-zero capacity for nullptr pointer: 1; NewDirectByteBuffer; ImageReader.SurfaceImage.nativeCreatePlanes",
+    "clean_stop": false,
+    "incomplete_audio_preserved": true
+  },
+  "fix": {
+    "decoder_output": "CPU-readable flexible YUV420 through MediaCodec.getOutputImage; no ImageReader Surface",
+    "ocr_input": "Copy visible crop with plane row/pixel strides to owned NV21 before releasing codec output",
+    "late_callbacks": "Suppress OCR observations and failures after close"
+  },
+  "s23_video_regression": {
+    "result": "OK (2 tests)",
+    "tests": [
+      "encodedAnnexBVideoDecodesIntoPhoneOcr",
+      "portraitVideoWithPaddedDecoderHeightDecodesIntoPhoneOcr"
+    ],
+    "assertions": [
+      "H264 encoded packets decode to actual ML Kit recognition containing MEET",
+      "No decoder or OCR warnings"
+    ]
+  },
+  "video_after_fix": {
+    "session_id": "b5d7a8ee-5212-4729-b8e5-93965ab8c27f",
+    "mode": "AUDIO_VIDEO",
+    "simulated_audio": false,
+    "pc_inference_enabled": false,
+    "clean_stop": true,
+    "health_events": [],
+    "warning_events": [],
+    "partial_files": [],
+    "m4a_segments": 3,
+    "decoded_audio_seconds": 21.106938775510205,
+    "normalized_pcm_unique_seconds": 21.107,
+    "pcm_chunks": 6,
+    "audio_formats": [
+      {
+        "codec": "aac",
+        "sample_rate": 44100,
+        "channels": 2
+      },
+      {
+        "codec": "aac",
+        "sample_rate": 44100,
+        "channels": 2
+      },
+      {
+        "codec": "aac",
+        "sample_rate": 44100,
+        "channels": 2
+      }
+    ],
+    "archive_pts_monotonic": true,
+    "ocr_observations": 20,
+    "video_visible_width": 480,
+    "video_visible_height": 856,
+    "decoder_buffer_height": 864,
+    "requested_video_fps": 15,
+    "ocr_max_requested_fps": 1,
+    "chinese_exact_substring_observations": 14,
+    "english_exact_substring_observations": 0,
+    "japanese_exact_substring_observations": 0,
+    "first_ocr_event_ms_after_start_event": 2089,
+    "first_ocr_event_is_not_camera_to_result_latency": true,
+    "reference_text": [
+      "Hello World!",
+      "你好世界",
+      "こんにちは! 202610/15"
+    ],
+    "quality_passed": false
+  },
+  "not_validated": [
+    "Formal HTC registration of com.beefsoup.ai.glass",
+    "Japanese OCR model support",
+    "Meeting OCR CER/WER dataset",
+    "Screen-off/background/call interruptions",
+    "15/30/60 minute endurance and thermal/battery behavior",
+    "Live phone-to-PC STT/translation/summary and p95 latency",
+    "Wi-Fi Direct transport",
+    "Qualcomm AI Hub on-device models"
+  ],
+  "private_raw_artifacts": "captures/2026-10-15/online-glasses/ (git-ignored)"
+}

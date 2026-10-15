@@ -16,6 +16,9 @@ class RemoteInferenceClient(
     private val onResult: (InferenceResult) -> Unit,
     private val onSummary: (String) -> Unit,
     private val onStatus: (String) -> Unit,
+    private val targetLanguage: String = "zh-TW",
+    private val continuousTranslation: Boolean = false,
+    private val onUtterance: (TranslatedUtterance) -> Unit = {},
 ) {
     private val client = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
     private val retries = Executors.newSingleThreadScheduledExecutor()
@@ -49,7 +52,8 @@ class RemoteInferenceClient(
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 if (closed) return
                 webSocket.send(JSONObject().put("type", "hello").put("token", token)
-                    .put("sessionId", store.id).put("epoch", epoch).toString())
+                    .put("sessionId", store.id).put("epoch", epoch).put("targetLanguage", targetLanguage)
+                    .put("continuousTranslation", continuousTranslation).toString())
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -65,7 +69,7 @@ class RemoteInferenceClient(
                             reconnectDelay = 2
                             onStatus("電腦推論已連線")
                             store.transcriptResults().forEach { sendEvidence(it) }
-                            store.ocrObservations().forEach { (sequence, observation) -> sendOcr(sequence, observation) }
+                            store.confirmedHighlightObservations().forEach { (sequence, observation) -> sendOcr(sequence, observation) }
                             pumpPending()
                             maybeFinalize()
                         }
@@ -73,6 +77,9 @@ class RemoteInferenceClient(
                             val result = InferenceProtocol.parseResult(text, store.id, epoch) ?: return
                             if (store.hasPending(result.sequence, result.startUs)) {
                                 onResult(result)
+                                json.optJSONArray("utterances")?.let { items ->
+                                    for (i in 0 until items.length()) onUtterance(InferenceProtocol.parseUtterance(items.getJSONObject(i)))
+                                }
                                 store.acknowledge(result.sequence)
                                 synchronized(sent) { sent.remove(result.sequence) }
                                 pumpPending()
@@ -84,6 +91,8 @@ class RemoteInferenceClient(
                             onSummary(json.getString("text"))
                             close()
                         }
+                        "utterance" -> if (json.optString("sessionId") == store.id &&
+                            json.optLong("epoch", -1) == epoch) onUtterance(InferenceProtocol.parseUtterance(json))
                         "error" -> onStatus("推論服務錯誤：${json.optString("code")}")
                     }
                 } catch (_: Exception) {
@@ -142,6 +151,12 @@ class RemoteInferenceClient(
         socket?.send(JSONObject().put("type", "ocr").put("sessionId", store.id)
             .put("epoch", epoch).put("sequence", sequence)
             .put("ptsUs", observation.ptsUs).put("text", observation.text).toString())
+    }
+
+    fun removeOcr(sequence: Long) {
+        if (!authenticated) return
+        socket?.send(JSONObject().put("type", "ocr_remove").put("sessionId", store.id)
+            .put("epoch", epoch).put("sequence", sequence).toString())
     }
 
     private fun sendEvidence(result: InferenceResult) {

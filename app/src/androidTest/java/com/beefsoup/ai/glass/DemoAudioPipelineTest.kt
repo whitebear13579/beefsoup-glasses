@@ -11,6 +11,7 @@ import org.junit.runner.RunWith
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(AndroidJUnit4::class)
 class DemoAudioPipelineTest {
@@ -21,6 +22,7 @@ class DemoAudioPipelineTest {
         val errors = mutableListOf<String>()
         val finished = CountDownLatch(1)
         val started = CountDownLatch(1)
+        val rejectedPacket = AtomicBoolean(false)
         val pipeline = AudioPipeline(directory, { synchronized(chunks) { chunks.add(it) } },
             { synchronized(errors) { errors.add(it) } }, {})
         val link = DemoGlassLink()
@@ -28,7 +30,7 @@ class DemoAudioPipelineTest {
         assertTrue(link.start(StreamMode.AUDIO, 1, object : GlassEvents {
             override fun onAudio(epoch: Long, packet: EncodedPacket) {
                 assertEquals(1, epoch)
-                assertTrue(pipeline.offer(packet))
+                if (!pipeline.offer(packet)) rejectedPacket.set(true)
             }
             override fun onVideo(epoch: Long, packet: EncodedPacket) = Unit
             override fun onStreamEvent(epoch: Long, event: StreamingEvent) {
@@ -40,6 +42,7 @@ class DemoAudioPipelineTest {
         link.stop(StreamMode.AUDIO)
         pipeline.finish { finished.countDown() }
         assertTrue(finished.await(10, TimeUnit.SECONDS))
+        assertFalse("Source delivered audio after stop or overfilled the pipeline", rejectedPacket.get())
         assertTrue(errors.toString(), errors.isEmpty())
         assertTrue("PCM chunk missing", chunks.isNotEmpty())
         val segment = directory.listFiles()?.singleOrNull { it.extension == "m4a" }

@@ -2,7 +2,9 @@
 
 本文件把 [SPEC](SPEC.md) 的目標與目前能提供的證據分開。以下「通過」僅代表列出的測試環境，不代表 VIVE Eagle 真機驗收。
 
-> 以下是 2026-10-02 的實作快照。2026-10-08 起已取得眼鏡並完成 S23 Ultra 無線部署；最新硬體／授權狀態見 [HARDWARE_VALIDATION.md](HARDWARE_VALIDATION.md)。2026-10-09 已定位 Connect 的套件白名單拒絕分支，並取得端點的實際 JSON，確認主專案新舊包名皆未收錄，見 [白名單取得結果](SDK_WHITELIST_CAPTURE_PLAN.md) 與 [授權流程分析](SDK_AUTH_FLOW_ANALYSIS.md)；主專案完整握手與眼鏡串流仍未通過。
+> **2026-10-15 使用者版本增量：**新增四頁原生介面、連續句子翻譯與 Android TTS、PC 視覺選重點及照片／OCR 人工確認。較早 APK 的 S23 完整 22 項、最新 APK 的指定回歸 3 項與 JVM 14 項、server 19 項通過。兩次真實眼鏡錄音約 45.8／48.4 秒均正常停止；使用者確認聲音來自眼鏡，亦確認譯音回授。自動影像選取未通過，手動照片及同圖 VLM 回放可用；新增候選備援、診斷及同目標語防護尚待眼鏡重測。見 [交接摘要](DEVELOPMENT_HANDOFF_2026-10-15.md)、[增量規格](PRODUCT_EVOLUTION_SPEC.md) 與 [驗證及問題紀錄](PRODUCT_VALIDATION_2026-10-15.md)。下方表格保留作歷史快照。
+
+> 以下表格與測試清單是 2026-10-02 的實作快照。最新進展：2026-10-15 在實驗 sample 包名下，已以 S23 Ultra／VIVE Eagle 通過 Connected、65.984 秒純音訊，以及修正原生影像崩潰後的 21.107 秒音影同流；S23 H.264→OCR 回歸 `OK (2 tests)`。OCR 品質、背景／長時錄製與正式包名登錄仍待驗收。見 [本次真機測試](HARDWARE_SMOKE_TEST_2026-10-15.md) 與 [完整接入紀錄](HARDWARE_VALIDATION.md)。先前白名單調查保留於 [取得結果](SDK_WHITELIST_CAPTURE_PLAN.md) 及 [授權流程分析](SDK_AUTH_FLOW_ANALYSIS.md)。
 
 | 能力 | 目前狀態 | 可重現證據／剩餘驗證 |
 |---|---|---|

@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T21:34:17.5372861+08:00",
+  "title": "Design System: AI 眼鏡會議紀錄",
+  "extensions": {
+    "colorMeta": {
+      "primary-light": {
+        "role": "primary",
+        "displayName": "深青綠主色（淺色）"
+      },
+      "on-primary-light": {
+        "role": "onPrimary",
+        "displayName": "主色文字（淺色）"
+      },
+      "primary-container-light": {
+        "role": "primaryContainer",
+        "displayName": "青綠容器（淺色）"
+      },
+      "on-primary-container-light": {
+        "role": "onPrimaryContainer",
+        "displayName": "容器文字（淺色）"
+      },
+      "surface-light": {
+        "role": "surface",
+        "displayName": "表面（淺色）"
+      },
+      "background-light": {
+        "role": "background",
+        "displayName": "背景（淺色）"
+      },
+      "primary-dark": {
+        "role": "primary",
+        "displayName": "青綠主色（深色）"
+      },
+      "on-primary-dark": {
+        "role": "onPrimary",
+        "displayName": "主色文字（深色）"
+      },
+      "primary-container-dark": {
+        "role": "primaryContainer",
+        "displayName": "青綠容器（深色）"
+      },
+      "on-primary-container-dark": {
+        "role": "onPrimaryContainer",
+        "displayName": "容器文字（深色）"
+      }
+    },
+    "nativePlatform": {
+      "platform": "android",
+      "toolkit": "Kotlin / Jetpack Compose / Material3",
+      "sourceFiles": [
+        "app/src/main/java/com/beefsoup/ai/glass/MeetingScreen.kt",
+        "app/src/main/java/com/beefsoup/ai/glass/MainActivity.kt",
+        "app/build.gradle.kts"
+      ],
+      "composeBom": "2024.09.00",
+      "material3": "1.3.0",
+      "composeUi": "1.7.0",
+      "composeFoundation": "1.7.0",
+      "versionEvidence": "Pinned dependency declaration plus locally cached compose-bom-2024.09.00.pom; no dependency resolution or build was run.",
+      "theme": "Static lightColorScheme/darkColorScheme overrides selected with isSystemInDarkTheme(); no dynamic color.",
+      "tokenOwnership": "DESIGN.md frontmatter contains only explicit color overrides and observed dp spacing; sidecar has no primitive token arrays.",
+      "defaultTokens": {
+        "colors": "All color roles not explicitly overridden in MeetingTheme are Material3 1.3.0 lightColorScheme()/darkColorScheme() defaults, including dark surfaces, secondary/tertiary, error roles, outlines and content colors.",
+        "typography": "Material3 1.3.0 Typography defaults and Android system multilingual font fallback/fontScale. No font family, size, weight, line height or letter spacing override.",
+        "typeRoles": [
+          "headlineMedium",
+          "headlineSmall",
+          "titleLarge",
+          "titleMedium",
+          "bodyLarge",
+          "bodyMedium",
+          "bodySmall",
+          "component-provided styles"
+        ],
+        "shapes": "Material3 1.3.0 Shapes defaults; connection/error Surface explicitly uses shapes.medium. No custom literal radii.",
+        "components": "Material3 1.3.0 built-in colors, content padding, typography, shapes, sizes, disabled/selected/focus/pressed states; explicitly supplied modifiers and delete-meeting error text are described in DESIGN.md.",
+        "depthAndMotion": "Material3 1.3.0 native elevation, shadows, ripple and transitions; no custom parameters or CSS equivalents recorded."
+      },
+      "spacingUnits": "dp in Kotlin; no dp-to-CSS-px identity is asserted.",
+      "breakpoints": "No custom responsive breakpoints observed; tablet adaptation is unverified.",
+      "tonalRamps": "Omitted: no custom tonal scales are defined. Synthetic ramps would invent Android source tokens."
+    },
+    "previewContract": {
+      "label": "示意網頁預覽：原生角色；非 Android 精確渲染。",
+      "authority": "Illustrative web previews of native roles only; never exact Android rendering or a replacement for Compose source.",
+      "metrics": "No native default metrics are invented. Browser controls supply preview geometry, typography and states.",
+      "colors": "Only explicit theme overrides are copied where relevant; browser Canvas and default controls are not Material3 default color values.",
+      "interaction": "HTML/CSS hover/focus/active affordances are illustrative browser behavior; snippets do not run the application workflow.",
+      "assets": "No decorative assets, sample meeting photos or remote resources."
+    },
+    "validation": {
+      "scope": "Documentation/source inspection only; no hardware, Git, build, screenshot or UI work performed in this pass.",
+      "reviewerEvidence": "User-provided handoff for this implementation turn; not independently revalidated by this documentation pass.",
+      "reviewer": {
+        "F1": "resolved",
+        "F2": "partial: 1.5 font scale and IME accessibility check incomplete",
+        "F3": "resolved",
+        "F4": "resolved"
+      },
+      "productUiApproval": "Not fully approved.",
+      "notCanonized": [
+        "Incomplete 1.5 font scale and IME accessibility checks; no explicit imePadding() in the inspected screen.",
+        "Full TalkBack and tablet adaptation are not established by this pass.",
+        "No hardware acoustics, automatic visual selection quality, model accuracy or long-duration reliability approval follows from UI documentation.",
+        "No existing defect is repaired or promoted to a reusable design rule."
+      ]
+    }
+  },
+  "components": [
+    {
+      "name": "Primary action / persistent stop",
+      "kind": "button",
+      "description": "Illustrative web preview of native roles, never exact Android rendering. Browser defaults are preview scaffolding, not Android tokens, dimensions, interaction evidence or approval. Native Button role: start or stop/save; persistent placement and actual enabled conditions are implemented by Scaffold, not this snippet.",
+      "html": "<div class=\"ds-preview\"><p>示意網頁預覽：原生角色；非 Android 精確渲染。</p><button class=\"ds-primary\" type=\"button\">停止並保存</button></div>",
+      "css": ".ds-preview { font: menu; color-scheme: light dark; } .ds-preview :focus-visible { outline: revert; } .ds-preview button:enabled:hover { text-decoration: underline; } .ds-preview button:enabled:active { text-decoration: underline double; } .ds-primary { background-color: #185F58; color: #FFFFFF; } @media (prefers-color-scheme: dark) { .ds-primary { background-color: #91D3CB; color: #003732; } }"
+    },
+    {
+      "name": "Outlined action",
+      "kind": "button",
+      "description": "Illustrative web preview of native roles, never exact Android rendering. Browser defaults are preview scaffolding, not Android tokens, dimensions, interaction evidence or approval. Native OutlinedButton role: connect, configure, retry or retain an image; border and geometry remain native library defaults.",
+      "html": "<div class=\"ds-preview\"><p>示意網頁預覽：原生角色；非 Android 精確渲染。</p><button class=\"ds-outlined\" type=\"button\">連接眼鏡</button></div>",
+      "css": ".ds-preview { font: menu; color-scheme: light dark; } .ds-preview :focus-visible { outline: revert; } .ds-preview button:enabled:hover { text-decoration: underline; } .ds-preview button:enabled:active { text-decoration: underline double; } .ds-outlined { color: #185F58; border-color: currentColor; background-color: Canvas; } @media (prefers-color-scheme: dark) { .ds-outlined { color: #91D3CB; } }"
+    },
+    {
+      "name": "Tonal confirmation",
+      "kind": "button",
+      "description": "Illustrative web preview of native roles, never exact Android rendering. Browser defaults are preview scaffolding, not Android tokens, dimensions, interaction evidence or approval. Native FilledTonalButton role: confirm a nonblank highlight. Its actual secondaryContainer/onSecondaryContainer colors are Material3 1.3.0 defaults; browser colors here do not approximate those tokens.",
+      "html": "<div class=\"ds-preview\"><p>示意網頁預覽：原生角色；非 Android 精確渲染。</p><button type=\"button\">確認重點</button></div>",
+      "css": ".ds-preview { font: menu; color-scheme: light dark; } .ds-preview :focus-visible { outline: revert; } .ds-preview button:enabled:hover { text-decoration: underline; } .ds-preview button:enabled:active { text-decoration: underline double; }"
+    },
+    {
+      "name": "Text action",
+      "kind": "button",
+      "description": "Illustrative web preview of native roles, never exact Android rendering. Browser defaults are preview scaffolding, not Android tokens, dimensions, interaction evidence or approval. Native TextButton role: edit, exclude, replay, share or dismiss; the native delete-meeting action additionally uses the default semantic error role.",
+      "html": "<div class=\"ds-preview\"><p>示意網頁預覽：原生角色；非 Android 精確渲染。</p><button class=\"ds-text\" type=\"button\">修改文字</button></div>",
+      "css": ".ds-preview { font: menu; color-scheme: light dark; } .ds-preview :focus-visible { outline: revert; } .ds-preview button:enabled:hover { text-decoration: underline; } .ds-preview button:enabled:active { text-decoration: underline double; } .ds-text { appearance: none; border-style: none; background: none; color: #185F58; } @media (prefers-color-scheme: dark) { .ds-text { color: #91D3CB; } }"
+    },
+    {
+      "name": "Service field",
+      "kind": "input",
+      "description": "Illustrative web preview of native roles, never exact Android rendering. Browser defaults are preview scaffolding, not Android tokens, dimensions, interaction evidence or approval. Native OutlinedTextField role with label and visible supporting error. Border, focus and error colors remain versioned native defaults.",
+      "html": "<div class=\"ds-preview\"><p>示意網頁預覽：原生角色；非 Android 精確渲染。</p><label class=\"ds-field\">電腦服務位址 <input type=\"url\" aria-invalid=\"true\" aria-describedby=\"ds-endpoint-error\"></label><p id=\"ds-endpoint-error\">請使用有效且安全的服務位址，路徑為 /ws</p></div>",
+      "css": ".ds-preview { font: menu; color-scheme: light dark; } .ds-preview :focus-visible { outline: revert; } .ds-preview button:enabled:hover { text-decoration: underline; } .ds-preview button:enabled:active { text-decoration: underline double; } .ds-field input:hover { outline: revert; }"
+    },
+    {
+      "name": "Four destinations",
+      "kind": "nav",
+      "description": "Illustrative web preview of native roles, never exact Android rendering. Browser defaults are preview scaffolding, not Android tokens, dimensions, interaction evidence or approval. Native NavigationBar/NavigationBarItem roles: meeting, translation, highlights and settings. This static snippet does not reproduce navigation, icons, selection colors or persistent stop layout.",
+      "html": "<div class=\"ds-preview\"><p>示意網頁預覽：原生角色；非 Android 精確渲染。</p><nav aria-label=\"主要目的地\"><button type=\"button\" aria-current=\"page\">會議</button><button type=\"button\">翻譯</button><button type=\"button\">重點</button><button type=\"button\">設定</button></nav></div>",
+      "css": ".ds-preview { font: menu; color-scheme: light dark; } .ds-preview :focus-visible { outline: revert; } .ds-preview button:enabled:hover { text-decoration: underline; } .ds-preview button:enabled:active { text-decoration: underline double; }"
+    },
+    {
+      "name": "Target language",
+      "kind": "chip",
+      "description": "Illustrative web preview of native roles, never exact Android rendering. Browser defaults are preview scaffolding, not Android tokens, dimensions, interaction evidence or approval. Native FilterChip role: selected target language; choices are disabled while active. Browser controls do not reproduce native chip shape or selection colors.",
+      "html": "<div class=\"ds-preview\"><p>示意網頁預覽：原生角色；非 Android 精確渲染。</p><div role=\"group\" aria-label=\"翻譯成\"><button type=\"button\" aria-pressed=\"true\">繁體中文</button><button type=\"button\" aria-pressed=\"false\">English</button><button type=\"button\" aria-pressed=\"false\">日本語</button></div></div>",
+      "css": ".ds-preview { font: menu; color-scheme: light dark; } .ds-preview :focus-visible { outline: revert; } .ds-preview button:enabled:hover { text-decoration: underline; } .ds-preview button:enabled:active { text-decoration: underline double; }"
+    },
+    {
+      "name": "Connection surface",
+      "kind": "card",
+      "description": "Illustrative web preview of native roles, never exact Android rendering. Browser defaults are preview scaffolding, not Android tokens, dimensions, interaction evidence or approval. Native Surface role, not a custom Card implementation: surfaceContainerHigh and shapes.medium from Material3 1.3.0. No literal platform container color, elevation or radius is synthesized.",
+      "html": "<div class=\"ds-preview\"><p>示意網頁預覽：原生角色；非 Android 精確渲染。</p><section aria-label=\"眼鏡連線狀態\"><p>眼鏡尚未連線</p><p>請先配戴眼鏡，並在 VIVE Connect 完成配對。</p><button type=\"button\">連接眼鏡</button></section></div>",
+      "css": ".ds-preview { font: menu; color-scheme: light dark; } .ds-preview :focus-visible { outline: revert; } .ds-preview button:enabled:hover { text-decoration: underline; } .ds-preview button:enabled:active { text-decoration: underline double; }"
+    },
+    {
+      "name": "Photo and recognition review",
+      "kind": "custom",
+      "description": "Illustrative web preview of native roles, never exact Android rendering. Browser defaults are preview scaffolding, not Android tokens, dimensions, interaction evidence or approval. Native AlertDialog/OutlinedTextField roles: source photo, editable recognition, cancel and save/confirm. No meeting photo is loaded or fabricated here, and no IME, fontScale, dialog geometry or behavioral validation is implied.",
+      "html": "<div class=\"ds-preview\"><p>示意網頁預覽：原生角色；非 Android 精確渲染。</p><section role=\"dialog\" aria-label=\"核對辨識文字\"><p>來源照片：實際會議影格（此示意預覽未載入照片）。</p><label>照片中的文字 <textarea></textarea></label><button type=\"button\">取消</button><button type=\"button\">儲存並確認</button></section></div>",
+      "css": ".ds-preview { font: menu; color-scheme: light dark; } .ds-preview :focus-visible { outline: revert; } .ds-preview button:enabled:hover { text-decoration: underline; } .ds-preview button:enabled:active { text-decoration: underline double; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "看得懂的會議記錄與翻譯",
+    "overview": "延續既有 Jetpack Compose／Material3 與產品名稱，以簡單操作支援「記錄 → 翻譯 → 核對重要影像」。青綠色、系統多語字型、清楚文字狀態與真實照片構成視覺，不新增品牌、裝飾素材或假數字。模式為 Operate。\n\n本文件合併本輪暫定 DESIGN.md 的已確認方向，以 `app/src/main/java/com/beefsoup/ai/glass/MeetingScreen.kt` 的 `MeetingTheme`／元件與 `MainActivity.kt` 的接線為實作依據。產品事實見 `PRODUCT.md`；預期驗收見 `docs/PRODUCT_EVOLUTION_SPEC.md`，既有結果見 `docs/PRODUCT_VALIDATION_2026-10-15.md`。操作外觀不構成模型品質、眼鏡聲學或長時可靠性的通過證據。\n\n**版本與驗證邊界：** `app/build.gradle.kts` 固定 Compose BOM `2024.09.00`；本機該 BOM POM 對應 Material3／material3-android `1.3.0`、Compose UI／Foundation `1.7.0`。未覆寫的語意色、Typography、Shapes、元件尺寸、狀態、陰影及動畫均沿用此版本平台預設，不另發明數值。依本輪使用者提供的 reviewer 交接，F1、F3、F4 已解決；F2 部分完成，1.5 倍字級與 IME 可及性檢查未完成。先前 S23 Ultra 原生截圖涵蓋主要四頁、深色及較大字級，不能推定完整 1.5 倍字級／IME／TalkBack 或平板適配通過。使用者已離開實驗室，本次僅核對文件與原始碼，沒有新增硬體、建置或截圖驗證，亦非完整產品 UI 核准。",
+    "keyCharacteristics": [
+      "原生 Material3 青綠語意色，跟隨系統明暗主題。",
+      "系統多語字型與 Material3 文字階層，操作簡單可讀。",
+      "四個固定目的地，錄製期間持續顯示停止並保存。",
+      "原文／譯文與照片／辨識文字可對照，人工確認重要證據。"
+    ],
+    "rules": [
+      {
+        "name": "The Semantic Status Rule",
+        "body": "狀態必須有文字與可操作的復原入口；顏色只能輔助表達，不能單獨承載連線、錄製、播報或錯誤狀態。",
+        "section": "colors"
+      },
+      {
+        "name": "The Platform Type Rule",
+        "body": "以既有 Material3 樣式表達階層；保留系統多語字型與字級縮放，不能把尚未完成的大字級檢查記為通過。",
+        "section": "typography"
+      },
+      {
+        "name": "The Persistent Stop Rule",
+        "body": "STARTING、RECORDING、STOPPING 期間，每個目的地的導覽列上方均顯示停止並保存；STOPPING 顯示「正在保存…」並停用重複操作。",
+        "section": "layout"
+      },
+      {
+        "name": "The Evidence Pair Rule",
+        "body": "重點必須保留照片、辨識文字、時間與來源提示的對照，以及確認、修改、排除操作；模型建議不得直接包裝成已確認會議事實。",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "**Do** 延續原生 Material3、靜態青綠語意色、明暗主題與系統多語字型。",
+      "**Do** 保留四個目的地、可見的連線／錯誤復原入口與持續可見的停止並保存。",
+      "**Do** 用可回看的原文／譯文及照片／辨識文字，支援核對、取消、修改與明確確認。",
+      "**Do** 保留 48 dp 觸控目標、系統返回、字級縮放及螢幕／鍵盤避讓要求，逐項區分實作與已驗證結果。"
+    ],
+    "donts": [
+      "**Don't** 新增品牌、裝飾資產、假數字，或以示範照片冒充使用者紀錄。",
+      "**Don't** 把位址、權杖、私有路徑或開發診斷放回主要操作畫面。",
+      "**Don't** 發明未覆寫的平台 token 數值，或把示意 HTML／CSS 當成 Android 外觀來源。",
+      "**Don't** 將 F2 部分完成、未通過的產品能力或既有缺陷寫成設計慣例或完整產品 UI 核准。"
+    ]
+  }
+}

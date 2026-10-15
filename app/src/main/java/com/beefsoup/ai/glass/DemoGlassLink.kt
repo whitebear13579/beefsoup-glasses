@@ -22,13 +22,16 @@ class DemoGlassLink : GlassLink {
     override val connected: StateFlow<Boolean> = _connected
     private val scope = CoroutineScope(Dispatchers.Default)
     private var job: Job? = null
+    private val callbacks = Any()
+    private var generation = 0L
 
     override fun connect() { _connected.value = true }
     override fun disconnect() { stop(StreamMode.AUDIO); _connected.value = false }
     override suspend fun ensurePermissions(activity: Activity, mode: StreamMode) = true
 
-    override fun start(mode: StreamMode, epoch: Long, events: GlassEvents): Boolean {
+    override fun start(mode: StreamMode, epoch: Long, events: GlassEvents): Boolean = synchronized(callbacks) {
         if (!_connected.value || job != null || mode != StreamMode.AUDIO) return false
+        val streamGeneration = ++generation
         job = scope.launch {
             val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, 16000, 1).apply {
                 setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
@@ -60,7 +63,9 @@ class DemoGlassLink : GlassLink {
                         if (out < 0) break
                         val packet = BufferSlice.copy(encoder.getOutputBuffer(out)!!,
                             info.offset, info.size, info.presentationTimeUs, info.flags)
-                        events.onAudio(epoch, packet)
+                        synchronized(callbacks) {
+                            if (isActive && generation == streamGeneration) events.onAudio(epoch, packet)
+                        }
                         encoder.releaseOutputBuffer(out, false)
                     }
                     delay(64)
@@ -70,8 +75,12 @@ class DemoGlassLink : GlassLink {
                 events.onStreamEvent(epoch, StreamingEvent.STOPPED)
             }
         }
-        return true
+        true
     }
 
-    override fun stop(mode: StreamMode) { job?.cancel(); job = null }
+    override fun stop(mode: StreamMode) { synchronized(callbacks) {
+        generation++
+        job?.cancel()
+        job = null
+    } }
 }

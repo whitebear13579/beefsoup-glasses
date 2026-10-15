@@ -12,6 +12,7 @@ server/.env
 server/certs/
 server/models/
 captures/
+.impeccable/review/
 emulator.stdout.log
 emulator.stderr.log
 

@@ -1,0 +1,11 @@
+{
+  "input_reference": "Hello everyone. We will finish the project tomorrow. Please review the meeting notes.",
+  "source": "Hello everyone. We will finish the project tomorrow. Please review the meeting notes.",
+  "translation": "大家好。我們將於明天完成專案。請審閱會議記錄。",
+  "language": "zh-TW",
+  "input_pcm_sha256": "3b7f7a580bf0b72cb2b72fb08776fd19c33c1fb1b58e04eae300704bd5134b68",
+  "stt_seconds": 1.5423512999986997,
+  "translation_seconds": 1.3161923000006936,
+  "stt_model": "faster-whisper-base",
+  "translation_model": "jaahas/qwen3.5-uncensored:4b"
+}
