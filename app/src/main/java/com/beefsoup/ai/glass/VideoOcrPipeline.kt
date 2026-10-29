@@ -6,6 +6,8 @@ import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.os.Handler
 import android.os.HandlerThread
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
@@ -26,10 +28,16 @@ class VideoOcrPipeline(
     private val onWarning: (String) -> Unit,
     private val onCandidate: (VisualFrame) -> Boolean = { true },
     private val automaticSelection: Boolean = true,
+    private val analyzeText: Boolean = true,
+    private val onPreview: ((Bitmap, Long) -> Unit)? = null,
+    private val previewFps: Int = 5,
+    private val initialWidth: Int = 856,
+    private val initialHeight: Int = 480,
 ) {
+    init { require(previewFps in 1..30 && initialWidth > 0 && initialHeight > 0) }
     private val thread = HandlerThread("meeting-video").apply { start() }
     private val handler = Handler(thread.looper)
-    private val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+    private val recognizer = if (analyzeText) TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build()) else null
     private val queued = ArrayDeque<EncodedPacket>()
     private val busy = AtomicBoolean(false)
     private val waitingCallbacks = AtomicInteger()
@@ -38,6 +46,7 @@ class VideoOcrPipeline(
     private var pps: ByteArray? = null
     private var lastOcrPtsUs = -1_000_000L
     private var lastText = ""
+    private var nextPreviewPtsUs = Long.MIN_VALUE
     private val candidateGate = VisualCandidateGate()
     private val captureRequested = AtomicBoolean(false)
     @Volatile private var closed = false
@@ -55,6 +64,7 @@ class VideoOcrPipeline(
     }
 
     fun offer(packet: EncodedPacket) {
+        if (closed) return
         if (waitingCallbacks.incrementAndGet() > 120) {
             waitingCallbacks.decrementAndGet()
             onWarning("影像接收積壓，已略過影格；音訊仍持續錄製")
@@ -74,13 +84,13 @@ class VideoOcrPipeline(
     }
 
     fun close() {
+        closed = true
         handler.post {
-            closed = true
             handler.removeCallbacks(outputPoll)
             queued.clear()
             codec?.runCatching { stop(); release() }
             codec = null
-            recognizer.close()
+            recognizer?.close()
             thread.quitSafely()
         }
     }
@@ -120,7 +130,7 @@ class VideoOcrPipeline(
     }
 
     private fun configure() {
-        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, 856, 480)
+        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, initialWidth, initialHeight)
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
             MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
         format.setByteBuffer("csd-0", ByteBuffer.wrap(sps!!))
@@ -140,15 +150,29 @@ class VideoOcrPipeline(
             if (index < 0) return
             try {
                 val ptsUs = info.presentationTimeUs
-                if (info.size > 0 && !busy.get() && ptsUs - lastOcrPtsUs >= 1_000_000L) {
-                    lastOcrPtsUs = ptsUs
-                    // Copy before releasing the codec buffer; ML Kit runs asynchronously.
+                val previewDue = onPreview != null && ptsUs >= nextPreviewPtsUs
+                val ocrDue = analyzeText && !busy.get() && ptsUs - lastOcrPtsUs >= 1_000_000L
+                if (info.size > 0 && (previewDue || ocrDue)) {
+                    // Copy before releasing the codec buffer; consumers never retain decoder images.
                     val packed = checkNotNull(active.getOutputImage(index)) {
                         "解碼器未提供可讀取的 YUV 影像"
                     }.use { copyForOcr(it) }
+                    if (previewDue) {
+                        val intervalUs = 1_000_000L / previewFps
+                        nextPreviewPtsUs = if (nextPreviewPtsUs == Long.MIN_VALUE) ptsUs + intervalUs
+                            else nextPreviewPtsUs + ((ptsUs - nextPreviewPtsUs) / intervalUs + 1) * intervalUs
+                        val jpeg = ByteArrayOutputStream()
+                        check(YuvImage(packed.bytes, ImageFormat.NV21, packed.width, packed.height, null)
+                            .compressToJpeg(Rect(0, 0, packed.width, packed.height), 90, jpeg))
+                        val bytes = jpeg.toByteArray()
+                        val bitmap = checkNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size))
+                        if (!closed) onPreview?.invoke(bitmap, ptsUs)
+                    }
+                    if (!ocrDue) continue
+                    lastOcrPtsUs = ptsUs
                     busy.set(true)
                     try {
-                        recognizer.process(InputImage.fromByteArray(packed.bytes, packed.width, packed.height,
+                        recognizer!!.process(InputImage.fromByteArray(packed.bytes, packed.width, packed.height,
                             0, InputImage.IMAGE_FORMAT_NV21))
                             .addOnSuccessListener { result ->
                                 val text = result.text.trim()

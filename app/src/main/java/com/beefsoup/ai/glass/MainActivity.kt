@@ -38,6 +38,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val state by runtime.state.collectAsState()
+            val cameraState by runtime.debugCameraState.collectAsState()
+            val toolsState by runtime.debugToolsState.collectAsState()
+            val sdkState by runtime.sdkDiagnostics.collectAsState()
             val useDemo = state.demo
             var pcEnabled by rememberSaveable { mutableStateOf(false) }
             var url by rememberSaveable { mutableStateOf("ws://10.0.2.2:8765/ws") }
@@ -46,6 +49,38 @@ class MainActivity : ComponentActivity() {
             MeetingTheme {
                 MeetingScreen(
                     state = state,
+                    debugCameraState = cameraState,
+                    debugToolsState = toolsState, sdkDiagnostics = sdkState,
+                    onDebugLeave = { runtime.stopDebugTests() },
+                    onDebugRefresh = { runtime.debugTools?.refresh() },
+                    onDebugDisconnect = { runtime.disconnectDebug() },
+                    onDebugClearEvents = { runtime.clearDebugEvents() },
+                    onDebugPermission = { camera -> withPermissions {
+                        lifecycleScope.launch { runtime.debugTools?.requestPermission(this@MainActivity, camera) }
+                    } },
+                    onDebugAudioStart = { withPermissions {
+                        lifecycleScope.launch { runtime.debugTools?.startAudio(this@MainActivity) }
+                    } },
+                    onDebugToolsStop = { runtime.debugTools?.stop() },
+                    onDebugAudioPlay = { runtime.debugTools?.play(it) },
+                    onDebugAudioDelete = { runtime.debugTools?.deleteAudio() },
+                    onDebugTranscribe = { withPermissions {
+                        lifecycleScope.launch { runtime.debugTools?.startTranscription(this@MainActivity) }
+                    } },
+                    onDebugSpeak = { text, language -> runtime.debugTools?.speak(text, language) },
+                    onDebugCameraStart = { withPermissions {
+                        lifecycleScope.launch { runtime.debugCamera?.start(this@MainActivity) }
+                    } },
+                    onDebugCameraStop = { runtime.debugCamera?.stop() },
+                    onDebugCameraCapture = { runtime.debugCamera?.capture() },
+                    onDebugCameraQuality = { runtime.debugCamera?.setQuality(it) },
+                    onDebugCameraFps = { runtime.debugCamera?.setPreviewFps(it) },
+                    onDebugStillSave = { lifecycleScope.launch { runtime.debugCamera?.saveStill() } },
+                    onDebugStillDiscard = { runtime.debugCamera?.discardStill() },
+                    onDebugPhotoQuality = { runtime.debugCamera?.setPhotoQuality(it) },
+                    onDebugStillCapture = { withPermissions {
+                        lifecycleScope.launch { runtime.debugCamera?.captureStill(this@MainActivity) }
+                    } },
                     useDemo = useDemo,
                     onDemo = { selected -> runtime.setDemo(selected) },
                     pcEnabled = pcEnabled,
@@ -100,6 +135,11 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onStop() {
+        runtime.stopDebugTests()
+        super.onStop()
     }
 
     private fun withPermissions(action: () -> Unit) {

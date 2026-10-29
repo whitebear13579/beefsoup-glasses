@@ -29,7 +29,9 @@ class DemoGlassLink : GlassLink {
     override fun disconnect() { stop(StreamMode.AUDIO); _connected.value = false }
     override suspend fun ensurePermissions(activity: Activity, mode: StreamMode) = true
 
-    override fun start(mode: StreamMode, epoch: Long, events: GlassEvents): Boolean = synchronized(callbacks) {
+    override fun start(mode: StreamMode, epoch: Long, events: GlassEvents,
+        videoQuality: com.htc.viveglass.sdk.VideoStreamingFormat.VideoQuality,
+        videoFrameRate: com.htc.viveglass.sdk.VideoStreamingFormat.FrameRate): Boolean = synchronized(callbacks) {
         if (!_connected.value || job != null || mode != StreamMode.AUDIO) return false
         val streamGeneration = ++generation
         job = scope.launch {

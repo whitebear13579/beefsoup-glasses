@@ -60,6 +60,30 @@ class MeetingRuntime(private val app: Application) {
     private val scope = CoroutineScope(Dispatchers.Main)
     private val _state = MutableStateFlow(MeetingUiState())
     val state: StateFlow<MeetingUiState> = _state
+    private fun meetingActive() = machine.snapshot().phase in setOf(SessionPhase.STARTING, SessionPhase.RECORDING, SessionPhase.STOPPING)
+    private val _sdkDiagnostics = MutableStateFlow(SdkDiagnostics())
+    val sdkDiagnostics: StateFlow<SdkDiagnostics> = _sdkDiagnostics
+    private var diagnosticsJob: Job? = null
+    val debugCamera: DebugCamera? = if (BuildConfig.DEBUG) DebugCamera(app, { link }, {
+        !state.value.demo && !meetingActive() && debugTools?.state?.value?.busy != true &&
+            debugTools?.state?.value?.playing != true && !link.diagnostics.value.speaking && !link.diagnostics.value.transcribing
+    }) else null
+    val debugCameraState: StateFlow<DebugCameraState> = debugCamera?.state ?: MutableStateFlow(DebugCameraState())
+    val debugTools: DebugSdkTools? = if (BuildConfig.DEBUG) DebugSdkTools(app, { link }, {
+        !state.value.demo && !meetingActive() && !debugCameraState.value.active && !debugCameraState.value.takingPhoto
+    }) else null
+    val debugToolsState: StateFlow<DebugToolsState> = debugTools?.state ?: MutableStateFlow(DebugToolsState())
+    private fun debugBusy() = debugCameraState.value.active || debugCameraState.value.takingPhoto ||
+        debugToolsState.value.busy || debugToolsState.value.playing || link.diagnostics.value.speaking || link.diagnostics.value.transcribing
+
+    fun stopDebugTests() { debugCamera?.stop(); debugTools?.stop() }
+    fun disconnectDebug() {
+        if (!BuildConfig.DEBUG || meetingActive()) return
+        stopDebugTests()
+        link.disconnect()
+        _state.update { it.copy(connected = false, connecting = false, status = "眼鏡已斷線") }
+    }
+    fun clearDebugEvents() { if (BuildConfig.DEBUG) link.clearDiagnostics() }
 
     init {
         observeConnection()
@@ -90,12 +114,18 @@ class MeetingRuntime(private val app: Application) {
 
     private fun observeConnection() {
         connectionJob?.cancel()
+        diagnosticsJob?.cancel()
+        if (BuildConfig.DEBUG) {
+            val source = link
+            diagnosticsJob = scope.launch { source.diagnostics.collect { _sdkDiagnostics.value = it } }
+        }
         connectionJob = scope.launch {
             link.connected.collect { connected ->
                 _state.update { old -> old.copy(connected = connected,
                     connecting = if (connected) false else old.connecting,
                     userIssue = if (connected) null else old.userIssue,
                     status = if (connected && old.connecting) "眼鏡已連線，可以開始記錄" else old.status) }
+                if (!connected && debugBusy()) stopDebugTests()
                 if (!connected && machine.snapshot().phase == SessionPhase.RECORDING)
                     fail(machine.snapshot().epoch, "眼鏡連線中斷")
             }
@@ -104,6 +134,7 @@ class MeetingRuntime(private val app: Application) {
 
     fun setDemo(enabled: Boolean) {
         if (machine.snapshot().phase in setOf(SessionPhase.STARTING, SessionPhase.RECORDING, SessionPhase.STOPPING)) return
+        stopDebugTests()
         link.disconnect()
         link = if (enabled) DemoGlassLink() else HtcGlassLink(app)
         observeConnection()
@@ -142,6 +173,10 @@ class MeetingRuntime(private val app: Application) {
 
     suspend fun start(activity: Activity, mode: StreamMode, offload: OffloadSettings?,
         continuousTranslation: Boolean = false, autoSpeak: Boolean = false): Boolean {
+        if (debugBusy()) {
+            _state.update { it.copy(userIssue = "請先在「測試」停止目前操作，再開始會議。") }
+            return false
+        }
         if (!link.connected.value) {
             _state.update { it.copy(status = "請先連線", userIssue = "請先連接眼鏡，再開始記錄。") }
             return false
@@ -160,6 +195,7 @@ class MeetingRuntime(private val app: Application) {
                 userIssue = "眼鏡麥克風／相機尚未授權。請在 VIVE Connect 允許此 App 使用眼鏡，回來後再次開始。") }
             return false
         }
+        if (debugBusy()) return false
         val epoch = machine.begin(mode) ?: return false
         remote?.close()
         remote = null

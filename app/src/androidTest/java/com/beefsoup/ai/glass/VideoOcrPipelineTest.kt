@@ -25,7 +25,25 @@ class VideoOcrPipelineTest {
         assertEncodedVideoOcr(480, 856)
     }
 
-    private fun assertEncodedVideoOcr(width: Int, height: Int) {
+    @Test fun previewDecodesWithoutOcrOrInference() {
+        assertEncodedVideoOcr(856, 480, previewOnly = true)
+    }
+
+    @Test fun previewCanDeliverFifteenFpsInsteadOfFive() {
+        assertEncodedVideoOcr(856, 480, previewOnly = true, previewFps = 15, frameStepUs = 66_667L, expectedFrames = 3)
+    }
+
+    @Test fun previewCanDeliverThirtyFps() {
+        assertEncodedVideoOcr(856, 480, previewOnly = true, previewFps = 30, frameStepUs = 33_334L, expectedFrames = 3)
+    }
+
+    @Test fun fullHdPreviewUsesSelectedDecoderDimensions() {
+        val quality = com.htc.viveglass.sdk.VideoStreamingFormat.VideoQuality.FULL_HD
+        assertEncodedVideoOcr(quality.width, quality.height, previewOnly = true)
+    }
+
+    private fun assertEncodedVideoOcr(width: Int, height: Int, previewOnly: Boolean = false,
+        previewFps: Int = 5, frameStepUs: Long = 1_000_000L, expectedFrames: Int = 1) {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         Canvas(bitmap).apply {
             drawColor(Color.WHITE)
@@ -37,11 +55,14 @@ class VideoOcrPipelineTest {
         }
         val observations = mutableListOf<OcrObservation>()
         val warnings = mutableListOf<String>()
-        val observed = CountDownLatch(1)
+        val observed = CountDownLatch(expectedFrames)
+        val preview = java.util.concurrent.atomic.AtomicReference<Bitmap?>()
         val pipeline = VideoOcrPipeline({
             synchronized(observations) { observations.add(it) }
             observed.countDown()
-        }, { synchronized(warnings) { warnings.add(it) } })
+        }, { synchronized(warnings) { warnings.add(it) } }, analyzeText = !previewOnly,
+            onPreview = if (previewOnly) { frame, _ -> preview.set(frame); observed.countDown() } else null,
+            previewFps = previewFps, initialWidth = width, initialHeight = height)
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
             setInteger(MediaFormat.KEY_BIT_RATE, 800_000)
@@ -75,7 +96,7 @@ class VideoOcrPipelineTest {
                     }
                 }
                 encoder.queueInputBuffer(index, 0, width * height * 3 / 2,
-                    frame * 1_000_000L, if (frame == 2) MediaCodec.BUFFER_FLAG_END_OF_STREAM else 0)
+                    frame * frameStepUs, if (frame == 2) MediaCodec.BUFFER_FLAG_END_OF_STREAM else 0)
             }
             val info = MediaCodec.BufferInfo()
             val deadline = System.currentTimeMillis() + 5_000
@@ -94,7 +115,11 @@ class VideoOcrPipelineTest {
             }
             assertTrue("OCR missing; packets=$packets bytes=$bytes sps=$spsCount pps=$ppsCount warnings=$warnings",
                 observed.await(20, TimeUnit.SECONDS))
-            assertTrue("OCR text=$observations", observations.any { it.text.contains("MEET", true) })
+            if (previewOnly) {
+                assertEquals(width, preview.get()!!.width)
+                assertEquals(height, preview.get()!!.height)
+                assertTrue(observations.isEmpty())
+            } else assertTrue("OCR text=$observations", observations.any { it.text.contains("MEET", true) })
             assertTrue("Decoder/OCR warnings=$warnings", synchronized(warnings) { warnings.isEmpty() })
         } finally {
             encoder.runCatching { stop(); release() }
