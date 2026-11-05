@@ -1,5 +1,6 @@
 package com.beefsoup.ai.glass
 
+import android.content.Context
 import android.media.Image
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
@@ -11,19 +12,30 @@ import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import java.nio.ByteBuffer
 import java.io.ByteArrayOutputStream
 import java.util.ArrayDeque
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 data class OcrObservation(val ptsUs: Long, val text: String)
 
+internal fun encodeOcrFrame(bytes: ByteArray, width: Int, height: Int): ByteArray {
+    val image = YuvImage(bytes, ImageFormat.NV21, width, height, null)
+    val output = ByteArrayOutputStream()
+    for (quality in listOf(95, 85, 75, 65, 50, 35)) {
+        output.reset()
+        check(image.compressToJpeg(Rect(0, 0, width, height), quality, output)) { "無法轉換影格" }
+        if (output.size() <= MAX_HIGHLIGHT_BYTES) return output.toByteArray()
+    }
+    error("影格過大，無法保存")
+}
+
 /** Decodes every H.264 reference frame but analyzes at most one image per second. */
 class VideoOcrPipeline(
+    context: Context,
     private val onObservation: (OcrObservation) -> Unit,
     private val onWarning: (String) -> Unit,
     private val onCandidate: (VisualFrame) -> Boolean = { true },
@@ -34,10 +46,17 @@ class VideoOcrPipeline(
     private val initialWidth: Int = 856,
     private val initialHeight: Int = 480,
 ) {
+    companion object {
+        // ponytail: one OCR worker across sessions; use a scheduler if concurrent sessions are supported.
+        private val ocrWorker = Executors.newSingleThreadExecutor { task ->
+            Thread(task, "meeting-ocr").apply { priority = Thread.MIN_PRIORITY }
+        }
+    }
+
     init { require(previewFps in 1..30 && initialWidth > 0 && initialHeight > 0) }
     private val thread = HandlerThread("meeting-video").apply { start() }
     private val handler = Handler(thread.looper)
-    private val recognizer = if (analyzeText) TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build()) else null
+    private val recognizer = if (analyzeText) PhoneOcr(context.applicationContext) else null
     private val queued = ArrayDeque<EncodedPacket>()
     private val busy = AtomicBoolean(false)
     private val waitingCallbacks = AtomicInteger()
@@ -83,14 +102,15 @@ class VideoOcrPipeline(
         }) waitingCallbacks.decrementAndGet()
     }
 
-    fun close() {
+    @Synchronized fun close() {
+        if (closed) return
         closed = true
+        if (recognizer != null) ocrWorker.execute { recognizer.close() }
         handler.post {
             handler.removeCallbacks(outputPoll)
             queued.clear()
             codec?.runCatching { stop(); release() }
             codec = null
-            recognizer?.close()
             thread.quitSafely()
         }
     }
@@ -151,7 +171,8 @@ class VideoOcrPipeline(
             try {
                 val ptsUs = info.presentationTimeUs
                 val previewDue = onPreview != null && ptsUs >= nextPreviewPtsUs
-                val ocrDue = analyzeText && !busy.get() && ptsUs - lastOcrPtsUs >= 1_000_000L
+                val ocrDue = analyzeText && !busy.get() && (automaticSelection || captureRequested.get()) &&
+                    ptsUs - lastOcrPtsUs >= 1_000_000L
                 if (info.size > 0 && (previewDue || ocrDue)) {
                     // Copy before releasing the codec buffer; consumers never retain decoder images.
                     val packed = checkNotNull(active.getOutputImage(index)) {
@@ -171,46 +192,52 @@ class VideoOcrPipeline(
                     if (!ocrDue) continue
                     lastOcrPtsUs = ptsUs
                     busy.set(true)
+                    val manual = captureRequested.getAndSet(false)
                     try {
-                        recognizer!!.process(InputImage.fromByteArray(packed.bytes, packed.width, packed.height,
-                            0, InputImage.IMAGE_FORMAT_NV21))
-                            .addOnSuccessListener { result ->
-                                val text = result.text.trim()
-                                handler.post {
-                                    if (closed) return@post
-                                    if (text.isNotBlank() && text != lastText) {
-                                        lastText = text
-                                        onObservation(OcrObservation(ptsUs, text))
-                                    }
-                                    val manual = captureRequested.getAndSet(false)
-                                    val luma = ByteArray(256) { i ->
-                                        val x = ((i % 16 + 0.5) * packed.width / 16).toInt().coerceAtMost(packed.width - 1)
-                                        val y = ((i / 16 + 0.5) * packed.height / 16).toInt().coerceAtMost(packed.height - 1)
-                                        packed.bytes[y * packed.width + x]
-                                    }
-                                    if (manual || automaticSelection && candidateGate.offer(ptsUs, text, luma)) {
-                                        val jpeg = ByteArrayOutputStream()
-                                        if (YuvImage(packed.bytes, ImageFormat.NV21, packed.width, packed.height, null)
-                                                .compressToJpeg(Rect(0, 0, packed.width, packed.height), 85, jpeg)) {
-                                            if (!onCandidate(VisualFrame(ptsUs, text, jpeg.toByteArray(), manual)) && !manual)
-                                                candidateGate.retry()
-                                        }
-                                    }
-                                }
-                            }
-                            .addOnFailureListener {
-                                if (!closed) onWarning("OCR 辨識失敗：${it.message}")
-                            }
-                            .addOnCompleteListener { busy.set(false) }
-                    } catch (error: Exception) {
+                        ocrWorker.execute { recognizeFrame(packed, ptsUs, manual) }
+                    } catch (_: RejectedExecutionException) {
                         busy.set(false)
-                        throw error
                     }
                 }
             } finally {
                 active.releaseOutputBuffer(index, false)
             }
         }
+    }
+
+    private fun recognizeFrame(packed: PackedFrame, ptsUs: Long, manual: Boolean) {
+        var jpeg: ByteArray? = null
+        var text = ""
+        var issue: String? = null
+        try {
+            if (closed) return
+            jpeg = encodeOcrFrame(packed.bytes, packed.width, packed.height)
+            text = recognizer!!.recognize(jpeg)
+        } catch (error: Exception) {
+            issue = "OCR 辨識失敗：${error.message}"
+        } catch (error: LinkageError) {
+            issue = "OCR 程式無法載入：${error.message}"
+        }
+        if (!handler.post {
+            try {
+                if (closed) return@post
+                issue?.let { onWarning(it) }
+                if (text.isNotBlank() && text != lastText) {
+                    lastText = text
+                    onObservation(OcrObservation(ptsUs, text))
+                }
+                val luma = ByteArray(256) { i ->
+                    val x = ((i % 16 + 0.5) * packed.width / 16).toInt().coerceAtMost(packed.width - 1)
+                    val y = ((i / 16 + 0.5) * packed.height / 16).toInt().coerceAtMost(packed.height - 1)
+                    packed.bytes[y * packed.width + x]
+                }
+                jpeg?.let { image ->
+                    if (manual || issue == null && automaticSelection && candidateGate.offer(ptsUs, text, luma)) {
+                        if (!onCandidate(VisualFrame(ptsUs, text, image, manual)) && !manual) candidateGate.retry()
+                    }
+                }
+            } finally { busy.set(false) }
+        }) busy.set(false)
     }
 
     private data class PackedFrame(val bytes: ByteArray, val width: Int, val height: Int)

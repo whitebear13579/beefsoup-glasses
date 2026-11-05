@@ -26,6 +26,10 @@ Debug 版本另有「測試」SDK 控制台：視訊品質／5–30 fps 目標�
 
 錄製以音訊持久化優先。音訊佇列溢位、寫入失敗、SDK 錯誤會停止並留下健康事件；影像處理積壓時可略過影格。若 App 在 M4A `.partial` 尚未封存時終止，最近會議會顯示異常結束；該片段不宣稱可播放。模擬模式不支援相機 OCR，需眼鏡或測試 H.264 來源。
 
+手機內建 PP-OCRv5 mobile 偵測及辨識模型（兩個 ONNX 檔共約 21.4 MB），不需額外安裝 OCR App 或連接電腦。啟用「保留重點影像」後，按「保留眼前內容」即可在手機辨識並保存照片，請等待處理完成再停止錄製；照片中的文字需人工核對。未連接電腦時只處理手動保留的影格；**自動判斷與會議相關的畫面、語音轉錄／翻譯與摘要仍需要電腦服務**。模型來源和授權見 [第三方資料](third_party/paddleocr/README.md)，LG VELVET 靜態圖片對照見 [實驗紀錄](docs/PPOCRV5_ANDROID_EXPERIMENT.md)。
+
+會議影像現在向 SDK 請求最高的 Full HD（1920×1080）、5 fps、800 kb/s；眼鏡本次實際回傳的直向影格為 1080×1920。影格在手機以 JPEG 品質 95 起編碼，過大時依序降低壓縮品質以符合 2 MB 上限，不縮小解析度。獨立拍照可得到不同尺寸的原始影像，但 SDK 資源限制不允許它與目前視訊串流同時使用，因此會議時保留的是串流影格。此設定已完成短時真機測試；長時間錄音、散熱、耗電、OCR 準確率及其他裝置仍須驗證。
+
 ## 電腦推論服務
 
 在 `server/` 建立 Python 3.12+ 虛擬環境（本機以 3.13 驗證，固定的 NumPy／PyAV 版本要求至少 3.12），安裝 `requirements.txt`；安裝並啟動 Ollama，確認 `ollama list` 有要使用的多語模型。預設示範模型為此工作站已有的 `jaahas/qwen3.5-uncensored:4b`，可設定 `AI_GLASS_OLLAMA_MODEL` 換成團隊評估通過的模型。Whisper `base` 會在首次使用時下載；可設定 `AI_GLASS_WHISPER_MODEL`、`AI_GLASS_WHISPER_DEVICE`、`AI_GLASS_WHISPER_COMPUTE`。
@@ -42,6 +46,15 @@ $env:AI_GLASS_TOKEN = '<自行產生的測試權杖>'
 
 PC 端以 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 辨識 16 kHz PCM；以 Ollama Chat API 執行翻譯與 JSON 摘要。視覺功能另需 `ollama pull qwen3-vl:2b-instruct`，預設由 `AI_GLASS_VISION_MODEL` 指定此 tag；`POST /vision/review` 與語音 WebSocket 分開。摘要依 80 條證據分批，只保留有本會議來源 ID 的項目；內容仍須人工評估。模型首次載入及共用 GPU 會影響延遲。
 
+可選擇以 OvisOCR2 執行 PC 端第二次辨識：啟動服務前執行以下指令。Qwen3-VL 仍負責選取畫面及裁切區域；OvisOCR2 辨識裁切後的文字。手機初步 OCR 與手動保留照片使用 PP-OCRv5。未設定 `AI_GLASS_OCR_MODEL` 時，維持原本由視覺模型執行第二次辨識的行為。
+
+```powershell
+ollama pull hf.co/bartowski/ATH-MaaS_OvisOCR2-GGUF:Q4_K_M
+$env:AI_GLASS_OCR_MODEL = 'hf.co/bartowski/ATH-MaaS_OvisOCR2-GGUF:Q4_K_M'
+```
+
+此 GGUF 為社群量化版本。已用專案合成白板圖做單次 Ollama 流程測試；尚未以眼鏡影像或多語標註資料評估品質，辨識結果仍須人工核對。兩個模型首次載入可能超過視覺請求期限。
+
 ## 測試
 
 ```powershell
@@ -49,10 +62,10 @@ PC 端以 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 辨識 16 
 python -m pytest server -q
 ```
 
-`connectedDebugAndroidTest` 需已啟動的 Android 模擬器或手機。測試涵蓋狀態轉換與晚到事件、AAC/H.264 封包解析、重採樣／重疊切塊、持久化與重送、WebSocket API 契約、來源核對、Compose 操作、Android `MediaCodec` 音訊封存、ML Kit OCR 與模擬來源的前景服務生命週期。完整真機驗收、60 分鐘錄製、溫度／耗電、BLE 斷線、眼鏡影像尺寸與 Qualcomm AI Hub 端側模型仍依 [SPEC §15](docs/SPEC.md) 待實機與模型資產驗證。
+`connectedDebugAndroidTest` 需已啟動的 Android 模擬器或手機。測試涵蓋狀態轉換與晚到事件、AAC/H.264 封包解析、重採樣／重疊切塊、持久化與重送、WebSocket API 契約、來源核對、Compose 操作、Android `MediaCodec` 音訊封存、PP-OCRv5、ML Kit 對照與模擬來源的前景服務生命週期。完整真機驗收、60 分鐘錄製、溫度／耗電、BLE 斷線、眼鏡影像尺寸與 Qualcomm AI Hub 端側模型仍依 [SPEC §15](docs/SPEC.md) 待實機與模型資產驗證。
 
 本輪較早 APK 的 S23 完整套件 22 項通過；最新候選變更版本另通過 3 項裝置回歸與 JVM 14 項，server 防護版本 19 項通過。兩次眼鏡實測錄音約 45.8／48.4 秒；自動重點選取未通過，僅手動照片與原圖模型回放有結果。實際 gateway 測試必須配置私有測試連線檔，否則明確 skip；TTS 裝置測試需要已安裝繁中離線語音。重現步驟與版本界線見 [驗證紀錄](docs/PRODUCT_VALIDATION_2026-10-15.md)，本次變更及待辦見 [交接摘要](docs/DEVELOPMENT_HANDOFF_2026-10-15.md)。
 
 ## AI Hub 的位置
 
-Qualcomm AI Hub 用來評估、轉換、量化與編譯**手機端模型**，不是會議串流 API。現階段 Android 端使用 ML Kit 作 OCR 基線，STT／翻譯／摘要使用可運作的 PC 推論；S23 Ultra 已確認為 SM8550，仍須選定 AI Hub 模型、取得資產並完成同機 profiling，才加入手機端推論適配層。未驗證前，App 會明示「待轉譯」而不假裝已有離線 AI 結果。
+Qualcomm AI Hub 用來評估、轉換、量化與編譯**手機端模型**，不是會議串流 API。現階段 Android 端使用 PP-OCRv5 作手機 OCR，STT／翻譯／摘要使用 PC 推論；PP-OCRv5 本次使用 CPU，並非 Qualcomm AI Hub 模型。其他手機端推論須選定模型、取得資產並完成目標手機 profiling，才加入適配層。未驗證前，App 會明示「待轉譯」而不假裝已有離線 AI 結果。

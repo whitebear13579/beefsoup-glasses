@@ -215,7 +215,7 @@ class HtcGlassLink(context: Context, private val glass: ViveGlass = ViveGlass())
                 }
             }
             val videoFormat = VideoStreamingFormat(
-                VideoStreamingFormat.DEFAULT_BITRATE,
+                if (videoQuality == VideoStreamingFormat.VideoQuality.FULL_HD) 800_000 else VideoStreamingFormat.DEFAULT_BITRATE,
                 videoQuality,
                 videoFrameRate,
                 false,

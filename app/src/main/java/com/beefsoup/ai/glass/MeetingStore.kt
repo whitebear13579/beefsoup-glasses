@@ -6,6 +6,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 
+internal const val MAX_HIGHLIGHT_BYTES = 2_000_000
+
 data class MeetingHighlight(val id: String, val sequence: Long, val ptsUs: Long,
     val imagePath: String, val text: String, val rawText: String, val category: String,
     val reason: String, val roi: List<Double>, val model: String,
@@ -113,7 +115,7 @@ class MeetingStore private constructor(val directory: File, val id: String) {
         }.associateBy { it.sequence }.values.sortedBy { it.sequence }
 
     @Synchronized fun saveHighlight(sequence: Long, frame: VisualFrame, review: VisualReview): MeetingHighlight {
-        require(review.keep && frame.jpeg.size <= 512_000 && (review.text.isNotBlank() || frame.manual))
+        require(review.keep && frame.jpeg.size <= MAX_HIGHLIGHT_BYTES && (review.text.isNotBlank() || frame.manual))
         val id = UUID.randomUUID().toString()
         val folder = File(directory, "images").apply { check(isDirectory || mkdirs()) }
         val file = File(folder, "$id.jpg")

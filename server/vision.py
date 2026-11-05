@@ -11,13 +11,13 @@ from starlette.concurrency import run_in_threadpool
 
 
 def validate_jpeg(encoded: object) -> bytes:
-    if not isinstance(encoded, str) or not 1 <= len(encoded) <= 700_000:
+    if not isinstance(encoded, str) or not 1 <= len(encoded) <= 2_666_668:
         raise ValueError("invalid_image")
     try:
         data = base64.b64decode(encoded, validate=True)
     except Exception as exc:
         raise ValueError("invalid_image") from exc
-    if len(data) > 512_000 or not data.startswith(b"\xff\xd8") or not data.endswith(b"\xff\xd9"):
+    if len(data) > 2_000_000 or not data.startswith(b"\xff\xd8") or not data.endswith(b"\xff\xd9"):
         raise ValueError("invalid_image")
     # Inspect dimensions before invoking the native image decoder.
     offset = 2
@@ -44,7 +44,7 @@ def validate_jpeg(encoded: object) -> bytes:
             dimensions = (width, height)
             break
         offset += size
-    if dimensions is None or not all(32 <= side <= 2048 for side in dimensions) or math.prod(dimensions) > 2_000_000:
+    if dimensions is None or not all(32 <= side <= 2048 for side in dimensions) or math.prod(dimensions) > 2_100_000:
         raise ValueError("invalid_image_dimensions")
     import av
     try:
@@ -108,7 +108,7 @@ def install_vision(app, engine, token):
         body = bytearray()
         async for part in request.stream():
             body.extend(part)
-            if len(body) > 750_000:
+            if len(body) > 2_750_000:
                 raise HTTPException(413, "image_request_too_large")
         import json
         try:
@@ -133,5 +133,8 @@ def install_vision(app, engine, token):
                 raise HTTPException(502, "invalid_vision_result") from exc
             except Exception as exc:
                 raise HTTPException(503, "vision_unavailable") from exc
-        return {**result, "sessionId": session_id, "epoch": data["epoch"], "ptsUs": data["ptsUs"],
-                "model": getattr(engine, "vision_model", type(engine).__name__)}
+        model = getattr(engine, "vision_model", type(engine).__name__)
+        ocr_model = getattr(engine, "ocr_model", model)
+        if result["keep"] and ocr_model != model:
+            model = f"{model} + {ocr_model}"
+        return {**result, "sessionId": session_id, "epoch": data["epoch"], "ptsUs": data["ptsUs"], "model": model}

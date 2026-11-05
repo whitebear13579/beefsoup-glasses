@@ -8,6 +8,28 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 
 class HighlightStorageTest {
+    @Test fun largerDetailedPhotoIsPreservedWithoutRemovingTheSizeLimit() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = MeetingStore.create(context)
+        try {
+            val bitmap = Bitmap.createBitmap(1024, 1024, Bitmap.Config.ARGB_8888)
+            val random = java.util.Random(42)
+            val pixels = IntArray(1024 * 1024) { random.nextInt() or -0x1000000 }
+            bitmap.setPixels(pixels, 0, 1024, 0, 0, 1024, 1024)
+            val output = ByteArrayOutputStream()
+            assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output))
+            bitmap.recycle()
+            val jpeg = output.toByteArray()
+            assertTrue("Expected JPEG between 512 kB and 2 MB: ${jpeg.size}", jpeg.size in 512_001..2_000_000)
+            val review = VisualReview(true, "", "document", "manual", listOf(0.0, 0.0, 1.0, 1.0), "pp-ocrv5-mobile")
+            val item = store.saveHighlight(0, VisualFrame(0, "", jpeg, manual = true), review)
+            assertArrayEquals(jpeg, File(item.imagePath).readBytes())
+            assertThrows(IllegalArgumentException::class.java) {
+                store.saveHighlight(1, VisualFrame(1, "", ByteArray(2_000_001), manual = true), review)
+            }
+        } finally { store.delete(context) }
+    }
+
     @Test fun selectedPhotoSurvivesReloadOnlyConfirmedTextIsEvidenceAndExclusionDeletesPhoto() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = MeetingStore.create(context)

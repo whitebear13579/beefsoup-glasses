@@ -1,4 +1,6 @@
 import base64
+import io
+import json as jsonlib
 from uuid import uuid4
 
 import av
@@ -6,7 +8,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from app import create_app
+from app import create_app, LocalModels
 from sentences import SentenceAssembler
 from test_app import FakeEngine, chunk, hello
 from vision import validate_jpeg, validate_review, crop_jpeg
@@ -154,6 +156,80 @@ def test_roi_is_physically_cropped_before_second_ocr_pass():
         assert (frame.width, frame.height) == (32, 64)
     with pytest.raises(ValueError, match="vision_region_too_small"):
         crop_jpeg(jpeg(), [0.0, 0.0, 0.01, 1.0])
+
+
+def test_full_hd_image_is_allowed_but_image_and_request_limits_remain_enforced():
+    codec = av.CodecContext.create("mjpeg", "w")
+    codec.width, codec.height, codec.pix_fmt = 1920, 1080, "yuvj420p"
+    image = bytes(codec.encode(av.VideoFrame.from_ndarray(
+        np.full((1080, 1920, 3), 240, dtype=np.uint8), format="rgb24"))[0])
+    assert validate_jpeg(base64.b64encode(image).decode()) == image
+    oversized = base64.b64encode(b"\xff\xd8" + b"0" * 2_000_000 + b"\xff\xd9").decode()
+    with pytest.raises(ValueError, match="invalid_image"):
+        validate_jpeg(oversized)
+    client = TestClient(create_app(VisionEngine(), "secret"))
+    response = client.post("/vision/review", content=b" " * 2_750_001,
+                           headers={"Authorization": "Bearer secret"})
+    assert response.status_code == 413
+
+
+@pytest.mark.parametrize("ocr_model", ["qwen", "ovisocr2"])
+def test_vision_routes_cropped_image_to_ocr_model(monkeypatch, ocr_model):
+    import httpx
+    calls = []
+    decision = {"category": "whiteboard", "roi": [0, 0, 500, 1000], "text": "initial",
+                "reason": "meeting", "legible": True, "relevant": True}
+
+    def post(url, *, json, timeout):
+        calls.append(json)
+        content = jsonlib.dumps(decision) if len(calls) == 1 else (
+            '{"text":"Cropped text"}' if ocr_model == "qwen" else "Cropped text")
+        return httpx.Response(200, json={"message": {"content": content}}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx, "post", post)
+    engine = LocalModels.__new__(LocalModels)
+    engine.ollama_url = "http://localhost/api/generate"
+    engine.vision_model, engine.ocr_model = "qwen", ocr_model
+    result = engine.review_image(jpeg(), "whole-frame OCR", "context")
+    assert result["text"] == "Cropped text"
+    assert [call["model"] for call in calls] == ["qwen", ocr_model]
+    assert calls[1]["think"] is False and calls[1]["options"]["num_ctx"] == 4096
+    assert ("format" in calls[1]) == (ocr_model == "qwen")
+    assert "whole-frame OCR" not in calls[1]["messages"][0]["content"]
+    cropped = base64.b64decode(calls[1]["messages"][0]["images"][0])
+    with av.open(io.BytesIO(cropped)) as container:
+        frame = next(container.decode(video=0))
+        assert (frame.width, frame.height) == (32, 64)
+
+
+def test_vision_response_records_both_models():
+    engine = VisionEngine()
+    engine.vision_model, engine.ocr_model = "qwen", "ovisocr2"
+    client = TestClient(create_app(engine, "secret"))
+    payload = {"sessionId": str(uuid4()), "epoch": 1, "ptsUs": 1,
+               "jpegBase64": base64.b64encode(jpeg()).decode(), "ocrText": "", "context": ""}
+    response = client.post("/vision/review", json=payload, headers={"Authorization": "Bearer secret"})
+    assert response.status_code == 200
+    assert response.json()["model"] == "qwen + ovisocr2"
+
+
+def test_rejected_scene_does_not_run_second_ocr(monkeypatch):
+    import httpx
+    calls = []
+
+    def post(url, *, json, timeout):
+        calls.append(json)
+        decision = {"category": "phone", "roi": [0, 0, 1000, 1000], "text": "personal",
+                    "reason": "phone", "legible": True, "relevant": False}
+        return httpx.Response(200, json={"message": {"content": jsonlib.dumps(decision)}},
+                              request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx, "post", post)
+    engine = LocalModels.__new__(LocalModels)
+    engine.ollama_url = "http://localhost/api/generate"
+    engine.vision_model, engine.ocr_model = "qwen", "ovisocr2"
+    assert not engine.review_image(jpeg(), "", "")["keep"]
+    assert len(calls) == 1
 
 
 def test_excluded_visual_evidence_cannot_remain_in_summary():

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
+import com.htc.viveglass.sdk.VideoStreamingFormat
 
 data class MeetingUiState(
     val session: SessionSnapshot = SessionSnapshot(SessionPhase.IDLE, null, 0),
@@ -268,7 +269,9 @@ class MeetingRuntime(private val app: Application) {
                         .put("bytes", file.length()))
                 })
             if (mode == StreamMode.AUDIO_VIDEO) {
+                val quality = VideoStreamingFormat.VideoQuality.FULL_HD
                 video = VideoOcrPipeline(
+                    context = app,
                     onObservation = { /* Raw OCR is a candidate signal, not a meeting record. */ },
                     onWarning = { reason ->
                         sessionStore.event("warning", JSONObject().put("reason", reason))
@@ -276,7 +279,7 @@ class MeetingRuntime(private val app: Application) {
                     }, onCandidate = { frame ->
                         if (frame.manual) {
                             saveHighlight(sessionStore, epoch, frame, VisualReview(true, frame.text,
-                                "document", "由你手動保留，請核對照片與辨識文字", listOf(0.0, 0.0, 1.0, 1.0), "phone-ocr"))
+                                "document", "由你手動保留，請核對照片與辨識文字", listOf(0.0, 0.0, 1.0, 1.0), "pp-ocrv5-mobile"))
                             true
                         }
                         else {
@@ -285,7 +288,7 @@ class MeetingRuntime(private val app: Application) {
                             visionReviewer?.offer(frame, synchronized(transcriptTimeline) {
                                 transcriptTimeline.display().takeLast(4).joinToString("\n") }) ?: false
                         }
-                    }, automaticSelection = offload != null)
+                    }, automaticSelection = offload != null, initialWidth = quality.width, initialHeight = quality.height)
             }
             ContextCompat.startForegroundService(app, Intent(app, MeetingService::class.java)
                 .setAction(MeetingService.ACTION_START).putExtra(MeetingService.EXTRA_TRANSLATION, continuousTranslation))
@@ -302,7 +305,8 @@ class MeetingRuntime(private val app: Application) {
                     main.post { handleStreamEvent(epoch, event) }
                 }
             }
-            if (!link.start(mode, epoch, events)) {
+            if (!link.start(mode, epoch, events, VideoStreamingFormat.VideoQuality.FULL_HD,
+                    VideoStreamingFormat.FrameRate.FPS_5)) {
                 fail(epoch, "SDK 拒絕啟動串流")
                 return false
             }

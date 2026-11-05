@@ -93,7 +93,7 @@ class DebugCamera(private val context: Context, private val link: () -> GlassLin
                 stop("無法開始預覽，請確認眼鏡相機／麥克風授權與連線。")
                 return
             }
-            pipeline = VideoOcrPipeline({}, { reason -> main.post {
+            pipeline = VideoOcrPipeline(context, {}, { reason -> main.post {
                 if (epoch == generation) stop(reason)
             } }, automaticSelection = false, analyzeText = false, onPreview = { bitmap, ptsUs ->
                 if (epoch == generation) {

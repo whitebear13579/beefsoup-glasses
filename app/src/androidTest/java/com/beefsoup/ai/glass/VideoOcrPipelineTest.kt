@@ -1,6 +1,7 @@
 package com.beefsoup.ai.glass
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -9,6 +10,7 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -17,12 +19,33 @@ import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class VideoOcrPipelineTest {
+    @Test fun detailedFullHdFrameIsBoundedWithoutChangingResolution() {
+        val width = 1080
+        val height = 1920
+        val nv21 = ByteArray(width * height * 3 / 2).also { java.util.Random(42).nextBytes(it) }
+        val jpeg = encodeOcrFrame(nv21, width, height)
+        assertTrue(jpeg.size <= MAX_HIGHLIGHT_BYTES)
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size, bounds)
+        assertEquals(width, bounds.outWidth)
+        assertEquals(height, bounds.outHeight)
+    }
+
     @Test fun encodedAnnexBVideoDecodesIntoPhoneOcr() {
         assertEncodedVideoOcr(856, 480)
     }
 
     @Test fun portraitVideoWithPaddedDecoderHeightDecodesIntoPhoneOcr() {
         assertEncodedVideoOcr(480, 856)
+    }
+
+    @Test fun manualCaptureUsesLocalOcrWithoutAutomaticSelection() {
+        assertEncodedVideoOcr(856, 480, manualCapture = true)
+    }
+
+    @Test fun fullHdManualCaptureUsesLocalOcr() {
+        val quality = com.htc.viveglass.sdk.VideoStreamingFormat.VideoQuality.FULL_HD
+        assertEncodedVideoOcr(quality.width, quality.height, frameStepUs = 200_000L, manualCapture = true)
     }
 
     @Test fun previewDecodesWithoutOcrOrInference() {
@@ -43,26 +66,33 @@ class VideoOcrPipelineTest {
     }
 
     private fun assertEncodedVideoOcr(width: Int, height: Int, previewOnly: Boolean = false,
-        previewFps: Int = 5, frameStepUs: Long = 1_000_000L, expectedFrames: Int = 1) {
+        previewFps: Int = 5, frameStepUs: Long = 1_000_000L, expectedFrames: Int = 1,
+        manualCapture: Boolean = false) {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         Canvas(bitmap).apply {
             drawColor(Color.WHITE)
             drawText("MEETING", width * 0.09f, height / 2f + 20, Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.BLACK
-                textSize = width * 0.134f
+                textSize = minOf(width * 0.134f, 120f)
                 typeface = Typeface.DEFAULT_BOLD
             })
         }
         val observations = mutableListOf<OcrObservation>()
         val warnings = mutableListOf<String>()
         val observed = CountDownLatch(expectedFrames)
+        val captured = CountDownLatch(1)
+        val candidate = java.util.concurrent.atomic.AtomicReference<VisualFrame?>()
         val preview = java.util.concurrent.atomic.AtomicReference<Bitmap?>()
-        val pipeline = VideoOcrPipeline({
+        val pipeline = VideoOcrPipeline(InstrumentationRegistry.getInstrumentation().targetContext, {
             synchronized(observations) { observations.add(it) }
             observed.countDown()
-        }, { synchronized(warnings) { warnings.add(it) } }, analyzeText = !previewOnly,
+        }, { synchronized(warnings) { warnings.add(it) } }, onCandidate = { frame ->
+            if (frame.manual) { candidate.set(frame); captured.countDown() }
+            true
+        }, automaticSelection = !manualCapture, analyzeText = !previewOnly,
             onPreview = if (previewOnly) { frame, _ -> preview.set(frame); observed.countDown() } else null,
             previewFps = previewFps, initialWidth = width, initialHeight = height)
+        if (manualCapture) pipeline.requestCapture()
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
             setInteger(MediaFormat.KEY_BIT_RATE, 800_000)
@@ -120,6 +150,12 @@ class VideoOcrPipelineTest {
                 assertEquals(height, preview.get()!!.height)
                 assertTrue(observations.isEmpty())
             } else assertTrue("OCR text=$observations", observations.any { it.text.contains("MEET", true) })
+            if (manualCapture) {
+                assertTrue("Manual frame not delivered", captured.await(20, TimeUnit.SECONDS))
+                assertEquals(observations.first().ptsUs, candidate.get()!!.ptsUs)
+                assertTrue(candidate.get()!!.text.contains("MEET", true))
+                assertTrue(candidate.get()!!.jpeg.isNotEmpty())
+            }
             assertTrue("Decoder/OCR warnings=$warnings", synchronized(warnings) { warnings.isEmpty() })
         } finally {
             encoder.runCatching { stop(); release() }

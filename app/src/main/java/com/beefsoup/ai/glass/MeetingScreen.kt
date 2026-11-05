@@ -174,7 +174,7 @@ internal tailrec fun Context.activity(): Activity? = when (this) {
                                 item {
                                     Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = MaterialTheme.shapes.large) {
                                         Column(Modifier.padding(16.dp)) {
-                                            SettingSwitch("保留重點影像", "辨識白板與文件；也可手動保留眼前內容。",
+                                            SettingSwitch("保留重點影像", "手機可辨識手動保留的畫面；連接電腦可自動挑選重點。",
                                                 includeImages, { includeImages = it }, !active)
                                         }
                                     }
@@ -269,7 +269,7 @@ internal tailrec fun Context.activity(): Activity? = when (this) {
                                 if (state.highlights.isEmpty()) item {
                                     Text("目前沒有重點照片", style = MaterialTheme.typography.titleMedium)
                                     Spacer(Modifier.height(8.dp))
-                                    Text("會議開始前啟用重點影像。清楚、穩定且與討論相關的畫面會送交辨識；也可按「保留眼前內容」。")
+                                    Text("會議開始前啟用重點影像，按「保留眼前內容」即可由手機辨識文字；連接電腦後也可自動挑選重點。")
                                 }
                                 items(state.highlights, key = { it.id }) { item -> HighlightSection(item, onHighlightUpdate) }
                                 item { Text(state.visionStatus, style = MaterialTheme.typography.bodySmall) }
@@ -392,7 +392,7 @@ internal tailrec fun Context.activity(): Activity? = when (this) {
                     .clickable(onClickLabel = "放大照片") { viewing = true }, contentScale = ContentScale.Fit) }
                 ?: Text("照片目前無法讀取，辨識文字仍保留。")
             Text(item.text.ifBlank { "尚無可讀的辨識文字，可手動補充。" }, style = MaterialTheme.typography.bodyLarge)
-            Text(if (item.model == "phone-ocr") "你手動保留的影格，請對照照片核對文字。"
+            Text(if (item.model in setOf("phone-ocr", "pp-ocrv5-mobile")) "你手動保留的影格，請對照照片核對文字。"
                 else "模型建議保留的片段，請確認與本次會議的關聯。",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             TextButton(onClick = { reasonVisible = !reasonVisible }) { Text(if (reasonVisible) "收合判斷原因" else "查看判斷原因") }
